@@ -47,3 +47,15 @@ pnpm type-check && pnpm lint && pnpm test:run
 ```
 
 提交信息 conventional commits(commitlint 强制):`feat: / fix: / docs: / style: / refactor: / perf: / test: / chore:`。
+
+## 6. H5 自动部署到 GitHub Pages
+
+工作流位于 `.github/workflows/deploy-pages.yml`。推送到 `master` 后自动构建并部署，也可以在 Actions 中选择 `Deploy H5 to GitHub Pages` → `Run workflow` 手动触发。
+
+首次启用需要仓库管理员在 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**，并确保仓库允许运行 Actions。工作流使用 GitHub 自动提供的 `GITHUB_TOKEN` 和 OIDC，无需添加个人 token。若 `github-pages` 环境配置了审核规则，部署仍需通过该审核。
+
+构建使用 Node.js 24、pnpm 10.10.0 和冻结锁文件，产物目录为 `dist/build/h5`。安装时跳过生命周期脚本以避免 CI 初始化 Git/Husky，再显式准备构建依赖和基础配置。Pages 的 `base_path` 会传给 `VITE_APP_PUBLIC_BASE`，适配仓库子路径或自定义域名；路由使用 hash 模式以支持刷新。
+
+默认项目站点地址为 `https://fengxiaopeng.github.io/qicheng-uniapp-babystar/`，实际地址以部署任务输出为准。此流程只发布 H5 静态文件，不部署后端或小程序。生产接口仍使用 `env/` 中的配置，后端需要允许站点来源跨域访问；不要把密钥放进 `VITE_*` 变量。
+
+发布工作流执行依赖安装和 H5 构建。合入前仍需执行上面的类型检查、Lint 和测试门禁；当前仓库已有的检查失败需单独修复。
