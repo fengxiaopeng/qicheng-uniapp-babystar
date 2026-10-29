@@ -2,6 +2,10 @@
 
 基于 uniapp + Vue3 + TypeScript + Vite5 + UnoCSS 的跨平台开发框架,支持 H5、小程序、APP 多平台,无需 HBuilderX,命令行开发。
 
+## 当前业务：宝宝积分
+
+单机版的业务代码位于 `src/features/baby/`，页面位于 `src/pages/`。数据、命令、账本规则和后续 API 接入约定见 [hermes/baby-offline.md](./hermes/baby-offline.md)。页面不直接操作本地存储，写操作统一经 `BabyRepository`；不要把本机角色切换当作真实身份认证。
+
 ## 工程规范(Hermes)
 
 详细规范唯一事实源在 [hermes/](./hermes/README.md),按场景取用:

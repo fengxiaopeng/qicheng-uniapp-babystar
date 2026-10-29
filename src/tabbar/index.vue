@@ -88,7 +88,7 @@ onMounted(() => {
   })
 })
 // #endif
-const activeColor = 'var(--wot-color-theme, #1890ff)'
+const activeColor = '#34785c'
 const inactiveColor = '#666'
 function getColorByIndex(index: number) {
   return tabbarStore.curIdx === index ? activeColor : inactiveColor
@@ -96,58 +96,17 @@ function getColorByIndex(index: number) {
 </script>
 
 <template>
-  <view v-if="customTabbarEnable" class="h-50px pb-safe">
-    <view class="border-and-fixed bg-white" @touchmove.stop.prevent>
-      <view class="h-50px flex items-center">
-        <view
-          v-for="(item, index) in tabbarList" :key="index"
-          class="flex flex-1 flex-col items-center justify-center"
-          :style="{ color: getColorByIndex(index) }"
-          @click="handleClick(index)"
-        >
-          <view v-if="item.isBulge" class="relative">
-            <!-- 中间一个鼓包tabbarItem的处理 -->
-            <view class="bulge">
-              <TabbarItem :item="item" :index="index" class="text-center" is-bulge />
-            </view>
-          </view>
-          <TabbarItem v-else :item="item" :index="index" class="relative px-3 text-center" />
-        </view>
-      </view>
-
-      <view class="pb-safe" />
+  <view v-if="customTabbarEnable" class="baby-tabbar">
+    <view class="tab-inner">
+      <button
+        v-for="(item, index) in tabbarList" :key="item.pagePath"
+        class="tab-button relative" :class="{ 'tab-active': tabbarStore.curIdx === index }"
+        :style="{ color: getColorByIndex(index) }"
+        :aria-label="item.text" :aria-current="tabbarStore.curIdx === index ? 'page' : undefined"
+        @click="handleClick(index)"
+      >
+        <TabbarItem :item="item" :index="index" />
+      </button>
     </view>
   </view>
 </template>
-
-<style scoped lang="scss">
-.border-and-fixed {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  border-top: 1px solid #eee;
-  box-sizing: border-box;
-}
-// 中间鼓包的样式
-.bulge {
-  position: absolute;
-  top: -20px;
-  left: 50%;
-  transform-origin: top center;
-  transform: translateX(-50%) scale(0.5) translateY(-33%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 250rpx;
-  height: 250rpx;
-  border-radius: 50%;
-  background-color: #fff;
-  box-shadow: inset 0 0 0 1px #fefefe;
-
-  &:active {
-    // opacity: 0.8;
-  }
-}
-</style>

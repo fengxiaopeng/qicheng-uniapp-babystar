@@ -1,0 +1,193 @@
+import type { BabyState, Task } from './types'
+
+export function createDemoState(now = new Date()): BabyState {
+  const iso = (offset: number, hour = 10) => {
+    const date = new Date(now)
+    date.setDate(date.getDate() + offset)
+    date.setHours(hour, 0, 0, 0)
+    return date.toISOString()
+  }
+  const task = (
+    id: string,
+    name: string,
+    icon: Task['icon'],
+    points: number,
+    category: Task['category'],
+    description: string,
+  ): Task => ({
+    id,
+    childId: 'dodo',
+    name,
+    icon,
+    points,
+    category,
+    description,
+    frequency: 'daily',
+    weekdays: [1],
+    dailyLimit: 1,
+    reminder: false,
+    reminderTime: '20:00',
+    archived: false,
+  })
+  return {
+    version: 1,
+    activeChildId: 'dodo',
+    activeMemberId: 'mom',
+    children: [
+      { id: 'dodo', name: '朵朵', birthday: '2020-07-16', avatar: 'bear' },
+      { id: 'milo', name: '米粒', birthday: '2022-03-08', avatar: 'rabbit' },
+    ],
+    members: [
+      { id: 'mom', name: '妈妈', avatar: '👩🏻', role: 'admin' },
+      { id: 'dad', name: '爸爸', avatar: '👨🏻', role: 'recorder' },
+      { id: 'grandma', name: '奶奶', avatar: '👵🏻', role: 'recorder' },
+    ],
+    tasks: [
+      task(
+        'reading',
+        '自主阅读20分钟',
+        'book',
+        10,
+        '学习成长',
+        '培养专注力 · 享受阅读的快乐',
+      ),
+      task(
+        'brushing',
+        '认真刷牙',
+        'brush',
+        5,
+        '生活习惯',
+        '保护牙齿 · 做干净的自己',
+      ),
+      task('tidying', '收拾玩具', 'blocks', 5, '生活习惯', '自己的事情自己做'),
+      task(
+        'exercise',
+        '户外运动30分钟',
+        'ball',
+        15,
+        '运动健康',
+        '跑跑跳跳 · 让身体充满能量',
+      ),
+      task(
+        'planting',
+        '照顾小植物',
+        'plant',
+        5,
+        '生活习惯',
+        '浇一点水 · 发现自然的变化',
+      ),
+      task(
+        'drawing',
+        '画一幅想象的画',
+        'art',
+        10,
+        '学习成长',
+        '让小小的灵感自由生长',
+      ),
+    ],
+    rewards: [
+      {
+        id: 'icecream',
+        childId: 'dodo',
+        name: '一份冰淇淋',
+        points: 50,
+        art: 'icecream',
+      },
+      {
+        id: 'park',
+        childId: 'dodo',
+        name: '周末去公园',
+        points: 150,
+        art: 'park',
+      },
+      {
+        id: 'movie',
+        childId: 'dodo',
+        name: '亲子电影之夜',
+        points: 100,
+        art: 'movie',
+      },
+      {
+        id: 'blocks',
+        childId: 'dodo',
+        name: '心爱的积木',
+        points: 300,
+        art: 'blocks',
+      },
+    ],
+    ledger: [
+      {
+        id: 'opening',
+        childId: 'dodo',
+        memberId: 'mom',
+        memberName: '妈妈',
+        title: '欢迎来到成长小队',
+        points: 73,
+        kind: 'opening',
+        createdAt: iso(-10),
+      },
+      ...[10, 15, 5, 20, 10, 15, 10].map((points, i) => ({
+        id: `history-${i}`,
+        childId: 'dodo',
+        memberId: 'mom',
+        memberName: '妈妈',
+        title: '认真完成成长任务',
+        points,
+        kind: 'task' as const,
+        createdAt: iso(i - 7),
+      })),
+      {
+        id: 'old-redeem',
+        childId: 'dodo',
+        memberId: 'dad',
+        memberName: '爸爸',
+        title: '兑换一份冰淇淋',
+        points: -50,
+        kind: 'redeem',
+        orderId: 'old-order',
+        createdAt: iso(-1, 16),
+      },
+      {
+        id: 'today-walk',
+        childId: 'dodo',
+        memberId: 'dad',
+        memberName: '爸爸',
+        title: '早起一起散步',
+        points: 15,
+        kind: 'task',
+        createdAt: iso(0, 8),
+      },
+      {
+        id: 'today-toys',
+        childId: 'dodo',
+        memberId: 'mom',
+        memberName: '妈妈',
+        title: '收拾玩具',
+        points: 5,
+        taskId: 'tidying',
+        taskIcon: 'blocks',
+        kind: 'task',
+        createdAt: iso(0, 9),
+      },
+    ],
+    orders: [
+      {
+        id: 'old-order',
+        childId: 'dodo',
+        name: '一份冰淇淋',
+        source: 'wish',
+        points: 50,
+        status: 'received',
+        createdAt: iso(-1, 16),
+        memberName: '爸爸',
+      },
+    ],
+    cards: (['book', 'brush', 'ball', 'plant'] as const).map((icon, index) => ({
+      id: `seed-${icon}`,
+      childId: 'dodo',
+      icon,
+      ledgerId: `history-${index}`,
+    })),
+    receipts: [],
+  }
+}

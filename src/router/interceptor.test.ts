@@ -7,6 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 beforeEach(() => {
   vi.resetModules()
+  // Keep permission fixtures independent of the product's public four-tab navigation.
+  vi.doMock('@/tabbar/config', () => ({
+    TABBAR_STRATEGY_MAP: { NO_TABBAR: 0, NATIVE_TABBAR: 1, CUSTOM_TABBAR: 2 },
+    selectedTabbarStrategy: 2,
+    tabbarList: [
+      { text: '首页', pagePath: 'pages/index/index', iconType: 'unocss', icon: 'i-carbon-home' },
+      { text: '我的', pagePath: 'pages/me/me', iconType: 'unocss', icon: 'i-carbon-user' },
+      { text: '关于', pagePath: 'pages/about/about', iconType: 'unocss', icon: 'i-carbon-menu', roles: ['admin'] },
+    ],
+  }))
 })
 
 async function invoke(url: string, userInfo?: { roles?: string[] }) {
@@ -18,7 +28,7 @@ async function invoke(url: string, userInfo?: { roles?: string[] }) {
   return navigateToInterceptor.invoke({ url })
 }
 
-// 用真实的 tabbar 配置跑：其中 'pages/about/about' 配了 roles: ['admin']
+// Explicit fixture: the about tab is restricted to admins.
 describe('navigateToInterceptor 角色守卫', () => {
   it('角色不足时阻止进入受限 tabbar 页，并回退到可见的 tabbar 页', async () => {
     const result = await invoke('/pages/about/about')

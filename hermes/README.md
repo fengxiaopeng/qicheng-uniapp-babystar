@@ -22,6 +22,10 @@
 | [performance.md](./performance.md) | 性能与分包：主包体积、内置优化表、包体积检查、编码侧规则 |
 | [release.md](./release.md) | 发布流程：upload:mp 全流程、changesets、uvm 升级、环境切换、合入门禁 |
 
+## 宝宝积分单机版
+
+产品目录、账本规则、本地数据、验证方式和后续 API 接入步骤见 [baby-offline.md](./baby-offline.md)。
+
 ## 常用命令
 
 ```bash

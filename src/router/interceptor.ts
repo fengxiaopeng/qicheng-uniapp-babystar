@@ -5,7 +5,7 @@ import { isMp } from '@uni-helper/uni-env'
  * 黑、白名单的配置，请看 config.ts 文件， EXCLUDE_LOGIN_PATH_LIST
  */
 import { useTokenStore } from '@/store/token'
-import { isPageTabbar, tabbarStore } from '@/tabbar/store'
+import { getTabbarRedirectPath, isPageTabbar, tabbarStore } from '@/tabbar/store'
 import { getAllPages, getLastPage, HOME_PAGE, parseUrlToObj } from '@/utils/index'
 import { EXCLUDE_LOGIN_PATH_LIST, isNeedLoginMode, LOGIN_PAGE, LOGIN_PAGE_ENABLE_IN_MP } from './config'
 
@@ -21,6 +21,11 @@ export function judgeIsExcludePath(path: string) {
 }
 
 function allowRoute(path: string) {
+  const redirectPath = getTabbarRedirectPath(path)
+  if (redirectPath) {
+    uni.reLaunch({ url: redirectPath })
+    return false
+  }
   tabbarStore.setAutoCurIdx(path)
   return true
 }
