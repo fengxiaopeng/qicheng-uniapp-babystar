@@ -1,13 +1,13 @@
 import type { BabyCommand, BabyState, LedgerEntry, Receipt } from './types'
 import {
-  availableCards,
   balance,
-  CARD_ICONS,
-  COLLECTION_REWARD,
   completedCount,
   dayKey,
   isReversed,
   isScheduled,
+  TASK_CATEGORIES,
+  TASK_ICONS,
+  validImageSource,
   WHEEL_COST,
   WHEEL_PRIZES,
   wheelRemaining,
@@ -20,7 +20,7 @@ function requireValue(condition: unknown, message: string): asserts condition {
     throw new BabyError(message)
 }
 
-/** Pure atomic transaction. Any exception discards all changes, including point/card deductions. */
+/** Pure atomic transaction. Any exception discards all changes, including point deductions and scratch progress. */
 export function executeCommand(
   current: BabyState,
   command: BabyCommand,
@@ -63,7 +63,9 @@ export function executeCommand(
       requireValue(task && isScheduled(task, now), '这个任务今天不需要完成')
       requireValue(
         completedCount(state, task.id, now) < task.dailyLimit,
-        '今天已经完成啦，明天再来吧',
+        task.frequency === 'once'
+          ? '这个单次任务已经完成，无需再执行'
+          : '今天已经完成啦，明天再来吧',
       )
       const entry = addEntry({
         title: task.name,
@@ -71,12 +73,6 @@ export function executeCommand(
         kind: 'task',
         taskId: task.id,
         taskIcon: task.icon,
-      })
-      state.cards.push({
-        id: `${command.id}-card`,
-        childId,
-        icon: task.icon,
-        ledgerId: entry.id,
       })
       receipt.message = `太棒了！获得 ${task.points} 积分`
       break
@@ -100,18 +96,33 @@ export function executeCommand(
         '每天可记录 1–20 次',
       )
       requireValue(
-        task.frequency === 'daily'
+        ['daily', 'once', 'weekend'].includes(task.frequency)
         || (task.weekdays.length > 0
           && task.weekdays.every(
             d => Number.isInteger(d) && d >= 0 && d <= 6,
           )),
         '请选择重复日期',
       )
-      requireValue(CARD_ICONS.includes(task.icon), '请选择任务图标')
       requireValue(
-        ['学习成长', '生活习惯', '运动健康'].includes(task.category),
-        '请选择任务分类',
+        ['daily', 'once', 'weekend', 'weekly', 'custom'].includes(
+          task.frequency,
+        ),
+        '请选择执行周期',
       )
+      if (task.frequency === 'once') {
+        requireValue(
+          Boolean(
+            task.onceDate
+            && /^\d{4}-\d{2}-\d{2}$/.test(task.onceDate)
+            && Number.isFinite(Date.parse(`${task.onceDate}T00:00:00`))
+            && dayKey(new Date(`${task.onceDate}T00:00:00`)) === task.onceDate,
+          ),
+          '请选择单次任务的有效执行日期',
+        )
+        requireValue(task.dailyLimit === 1, '单次任务只能执行一次')
+      }
+      requireValue(TASK_ICONS.includes(task.icon), '请选择任务图标')
+      requireValue(TASK_CATEGORIES.includes(task.category), '请选择任务分类')
       requireValue(
         /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(task.reminderTime),
         '提醒时间不正确',
@@ -151,14 +162,8 @@ export function executeCommand(
       requireValue(command.reason.trim(), '请填写撤销原因')
       requireValue(
         balance(state) >= original.points,
-        '余额不足，请先处理相关兑换后再撤销',
+        '积分已经使用，当前余额不足，暂时无法撤销这笔记录',
       )
-      const grants = state.cards.filter(c => c.ledgerId === original.id)
-      requireValue(
-        !grants.some(c => c.consumedBy),
-        '该任务获得的卡片已经兑换，无法撤销',
-      )
-      state.cards = state.cards.filter(c => c.ledgerId !== original.id)
       addEntry({
         title: `撤销：${original.title}`,
         points: -original.points,
@@ -185,7 +190,6 @@ export function executeCommand(
         name: reward.name,
         source: 'wish',
         points: reward.points,
-        status: 'pending',
         createdAt: now.toISOString(),
         memberName: actor.name,
       })
@@ -195,7 +199,7 @@ export function executeCommand(
         kind: 'redeem',
         orderId: id,
       })
-      receipt.message = '兑换成功，等待家长发放奖励'
+      receipt.message = '奖励已兑换完成'
       break
     }
     case 'spin': {
@@ -229,7 +233,6 @@ export function executeCommand(
           name: prize.name,
           source: 'wheel',
           points: WHEEL_COST,
-          status: 'pending',
           createdAt: now.toISOString(),
           memberName: actor.name,
         })
@@ -240,70 +243,130 @@ export function executeCommand(
         : '这次是再接再厉，下次好运！'
       break
     }
-    case 'redeemCollection': {
-      const cards = CARD_ICONS.map(icon => availableCards(state, icon)[0])
-      requireValue(cards.every(Boolean), '还没有集齐六种卡片，继续加油吧')
-      const orderId = `${command.id}-order`
-      cards.forEach((card) => {
-        card.consumedBy = orderId
+    case 'saveScratch': {
+      assertAdmin()
+      const activity = command.activity
+      requireValue(activity.childId === childId, '奖励不属于当前宝宝')
+      requireValue(
+        activity.name.trim().length > 0 && activity.name.trim().length <= 30,
+        '奖励名称需要 1–30 个字',
+      )
+      requireValue(
+        validImageSource(activity.image),
+        '请选择 JPG、PNG 或 WebP 图片，图片需小于约1MB',
+      )
+      requireValue([2, 3, 4].includes(activity.gridSize), '请选择4、9或16格')
+      requireValue(
+        Number.isInteger(activity.pointsPerPiece)
+        && activity.pointsPerPiece >= 1
+        && activity.pointsPerPiece <= 999,
+        '每格积分需要是1–999的整数',
+      )
+      const index = state.scratchActivities.findIndex(
+        a => a.id === activity.id,
+      )
+      const existing = state.scratchActivities[index]
+      requireValue(
+        !existing || existing.childId === childId,
+        '不能修改其他宝宝的奖励',
+      )
+      requireValue(
+        !existing || !existing.pieces.some(p => p.entryId),
+        '已经开始的刮卡不能修改，请新建奖励',
+      )
+      const saved = {
+        ...activity,
+        name: activity.name.trim(),
+        createdAt: existing?.createdAt ?? now.toISOString(),
+        completedAt: undefined,
+        pieces: Array.from({ length: activity.gridSize ** 2 }, (_, i) => ({
+          index: i,
+          revealed: false,
+        })),
+      }
+      if (index < 0)
+        state.scratchActivities.push(saved)
+      else state.scratchActivities[index] = saved
+      receipt.message = '图片刮卡奖励已保存'
+      break
+    }
+    case 'buyScratchPiece': {
+      const activity = state.scratchActivities.find(
+        a => a.id === command.activityId && a.childId === childId,
+      )
+      requireValue(
+        activity && !activity.completedAt,
+        '这份刮卡奖励已结束或不存在',
+      )
+      const piece = activity.pieces.find(p => p.index === command.index)
+      requireValue(piece, '格子不存在')
+      if (piece.entryId) {
+        receipt.message = '这一格已经支付，可继续刮开'
+        break
+      }
+      requireValue(
+        balance(state) >= activity.pointsPerPiece,
+        '积分还不够，先完成一些任务吧',
+      )
+      const entry = addEntry({
+        title: `刮卡「${activity.name}」第${piece.index + 1}格`,
+        points: -activity.pointsPerPiece,
+        kind: 'scratch',
       })
+      piece.entryId = entry.id
+      receipt.message = '已支付积分，在格子上滑动刮开吧'
+      break
+    }
+    case 'revealScratchPiece': {
+      const activity = state.scratchActivities.find(
+        a => a.id === command.activityId && a.childId === childId,
+      )
+      requireValue(
+        activity && !activity.completedAt,
+        '这份刮卡奖励已结束或不存在',
+      )
+      const piece = activity.pieces.find(p => p.index === command.index)
+      requireValue(piece?.entryId, '请先支付这一格的积分')
+      piece.revealed = true
+      receipt.message = '又揭开了一点小期待'
+      break
+    }
+    case 'redeemScratch': {
+      const activity = state.scratchActivities.find(
+        a => a.id === command.activityId && a.childId === childId,
+      )
+      requireValue(
+        activity && !activity.completedAt,
+        '这份奖励已经兑换过或不存在',
+      )
+      requireValue(
+        activity.pieces.every(p => p.entryId && p.revealed),
+        '把所有格子刮开后就可以兑换啦',
+      )
+      const orderId = `${command.id}-order`
+      const cost = activity.pieces.reduce(
+        (sum, p) =>
+          sum - (state.ledger.find(e => e.id === p.entryId)?.points ?? 0),
+        0,
+      )
       state.orders.push({
         id: orderId,
         childId,
-        name: COLLECTION_REWARD,
+        name: activity.name,
+        image: activity.image,
         source: 'collection',
-        points: 0,
-        status: 'pending',
+        points: cost,
         createdAt: now.toISOString(),
         memberName: actor.name,
       })
+      activity.completedAt = now.toISOString()
       addEntry({
-        title: `集卡兑换${COLLECTION_REWARD}`,
+        title: `刮卡兑换${activity.name}`,
         points: 0,
         kind: 'collection',
         orderId,
       })
-      receipt.message = '集卡兑换成功，没有扣除积分'
-      break
-    }
-    case 'receiveOrder': {
-      assertAdmin()
-      const order = state.orders.find(
-        o => o.id === command.orderId && o.childId === childId,
-      )
-      requireValue(order?.status === 'pending', '这份奖励已经处理过了')
-      order.status = 'received'
-      receipt.message = '奖励已领取，把快乐好好收藏'
-      break
-    }
-    case 'cancelOrder': {
-      assertAdmin()
-      const order = state.orders.find(
-        o => o.id === command.orderId && o.childId === childId,
-      )
-      requireValue(order?.status === 'pending', '只能取消待领取的奖励')
-      requireValue(command.reason.trim(), '请填写取消原因')
-      order.status = 'cancelled'
-      // A wheel draw is already consumed; cancelling its prize does not refund the draw fee.
-      const refund = order.source === 'wish' ? order.points : 0
-      if (order.source === 'collection') {
-        state.cards.forEach((card) => {
-          if (card.consumedBy === order.id)
-            delete card.consumedBy
-        })
-      }
-      addEntry({
-        title: `取消兑换：${order.name}`,
-        points: refund,
-        kind: 'refund',
-        orderId: order.id,
-        note: command.reason.trim(),
-      })
-      receipt.message = refund
-        ? `已取消，退回 ${refund} 积分`
-        : order.source === 'collection'
-          ? '已取消，退回本次消耗的卡片'
-          : '奖品已取消，转盘费用和次数不退回'
+      receipt.message = '图片已完整揭开，奖励兑换完成！'
       break
     }
     case 'selectChild':

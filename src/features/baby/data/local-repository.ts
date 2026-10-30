@@ -1,5 +1,7 @@
 import type { BabyCommand, BabyRepository, BabyState } from '../domain/types'
 import { BabyError, executeCommand } from '../domain/commands'
+import { validImageSource } from '../domain/rules'
+import { migrateSnapshot } from './migrate'
 import { createDemoState } from '../domain/seed'
 
 export const STORAGE_KEY = 'babystar:family:v1'
@@ -19,13 +21,13 @@ function parseState(raw: unknown): BabyState {
     'rewards',
     'ledger',
     'orders',
-    'cards',
+    'scratchActivities',
     'receipts',
   ] as const
   if (
     !s
     || typeof s !== 'object'
-    || s.version !== 1
+    || s.version !== 2
     || arrays.some(k => !Array.isArray(s[k]))
   ) {
     throw new BabyError(
@@ -92,17 +94,63 @@ function parseState(raw: unknown): BabyState {
           'childId',
           'name',
           'source',
-          'status',
           'createdAt',
           'memberName',
         ]) && Number.isInteger(o.points),
     )
-    || !state.cards.every(c =>
-      strings(c, ['id', 'childId', 'icon', 'ledgerId']),
+    || !state.scratchActivities.every(
+      a =>
+        strings(a, ['id', 'childId', 'name', 'image', 'createdAt'])
+        && validImageSource(a.image)
+        && [2, 3, 4].includes(a.gridSize)
+        && Number.isInteger(a.pointsPerPiece)
+        && a.pointsPerPiece >= 1
+        && a.pointsPerPiece <= 999
+        && Array.isArray(a.pieces)
+        && a.pieces.length === a.gridSize ** 2
+        && new Set(a.pieces.map(p => p?.index)).size === a.pieces.length
+        && a.pieces.every(
+          p =>
+            p
+            && Number.isInteger(p.index)
+            && p.index >= 0
+            && p.index < a.pieces.length
+            && typeof p.revealed === 'boolean'
+            && (!p.revealed || typeof p.entryId === 'string')
+            && (!p.entryId
+              || state.ledger.some(
+                e =>
+                  e.id === p.entryId
+                  && e.kind === 'scratch'
+                  && e.childId === a.childId
+                  && e.points === -a.pointsPerPiece,
+              )),
+        )
+        && (!a.completedAt || a.pieces.every(p => p.revealed)),
     )
-    || !state.receipts.every(r => strings(r, ['commandId', 'message']))
-    || !state.children.some(c => c.id === state.activeChildId)
-    || !state.members.some(m => m.id === state.activeMemberId)
+    || (state.legacy !== undefined
+      && (!state.legacy
+        || !Array.isArray(state.legacy.cards)
+        || !state.legacy.cards.every(c =>
+          strings(c, ['id', 'childId', 'icon', 'ledgerId']),
+        )
+        || !Array.isArray(state.legacy.cancelledOrders)
+        || !state.legacy.cancelledOrders.every(
+          o =>
+            strings(o, [
+              'id',
+              'childId',
+              'name',
+              'source',
+              'createdAt',
+              'memberName',
+            ])
+            && o.status === 'cancelled'
+            && Number.isInteger(o.points),
+        )))
+        || !state.receipts.every(r => strings(r, ['commandId', 'message']))
+        || !state.children.some(c => c.id === state.activeChildId)
+        || !state.members.some(m => m.id === state.activeMemberId)
   ) {
     throw new BabyError(
       '本地数据校验未通过，原始数据已保留，请勿清理浏览器数据',
@@ -125,7 +173,11 @@ export function createLocalRepository(
       storage.write(demo)
       return demo
     }
-    return parseState(raw)
+    const migrated = migrateSnapshot(raw)
+    const state = parseState(migrated)
+    if (migrated !== raw)
+      storage.write(state)
+    return state
   }
   return {
     load: async () => loadState(),

@@ -2,14 +2,17 @@
 import type { Task } from '../domain/types'
 import { ref } from 'vue'
 import { navigate, newId, useBaby } from '../application/use-baby'
-import { TASK_EMOJI } from '../domain/rules'
+import { TASK_EMOJI, taskFrequencyLabel } from '../domain/rules'
 import BabyIcon from './BabyIcon.vue'
 
-const props = withDefaults(defineProps<{
-  task: Task
-  manage?: boolean
-  scheduled?: boolean
-}>(), { scheduled: true })
+const props = withDefaults(
+  defineProps<{
+    task: Task
+    manage?: boolean
+    scheduled?: boolean
+  }>(),
+  { scheduled: true },
+)
 const { busy, completed, send, isAdmin } = useBaby()
 const undoId = ref('')
 async function record() {
@@ -50,8 +53,8 @@ async function undo() {
       <view class="muted mt-1 text-11px leading-4">
         {{
           manage
-            ? `${task.category} · ${task.frequency === "daily" ? "每天" : task.frequency === "weekly" ? "每周" : "自定义日期"} · 每天${task.dailyLimit}次`
-            : task.description
+            ? `${task.category} · ${taskFrequencyLabel(task)}`
+            : task.frequency === 'daily' ? task.description : taskFrequencyLabel(task)
         }}
       </view>
     </view>
@@ -73,7 +76,7 @@ async function undo() {
         <button
           class="button button-small"
           :class="
-            completed(task.id) >= task.dailyLimit
+            completed(task.id) >= task.dailyLimit || scheduled === false
               ? 'button-disabled'
               : 'button-primary'
           "
@@ -86,7 +89,7 @@ async function undo() {
           {{
             completed(task.id) >= task.dailyLimit
               ? "已完成"
-              : task.dailyLimit > 1
+              : scheduled === false ? "非执行日" : task.dailyLimit > 1
                 ? `${completed(task.id)}/${task.dailyLimit} 记一笔`
                 : "记一笔"
           }}

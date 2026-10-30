@@ -177,7 +177,7 @@ async function remove() {
           管理员
         </button>
       </view><text class="muted mb-5 block text-11px leading-5">
-        管理员可以设置任务与奖励、发放奖励、纠正记录和管理家庭。家庭至少保留一位管理员。
+        管理员可以设置任务与奖励、纠正记录和管理家庭。家庭至少保留一位管理员。
       </text><button class="button button-primary" :disabled="busy" @click="save">
         保存家人资料
       </button><button
@@ -200,7 +200,7 @@ async function remove() {
         <view class="font-bold">
           管理员
         </view><text class="mt-2 block text-13px leading-6">
-          管理宝宝、任务、奖励和家庭成员；发放或取消奖励；撤销任务积分。
+          管理宝宝、任务、奖励和家庭成员；撤销任务积分。
         </text>
       </view><view class="card mt-3 !bg-#f5f1e8">
         <view class="font-bold">

@@ -17,7 +17,7 @@ definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '宝宝积分' },
 })
 
-const { state, points, todayEarned, todayTasks, streak, rewards } = useBaby()
+const { state, points, todayEarned, todayTasks, streak, rewards, calendarDate } = useBaby()
 const goal = computed(
   () =>
     rewards.value.find(r => r.id === 'park')
@@ -25,7 +25,7 @@ const goal = computed(
     ?? rewards.value[0],
 )
 const week = computed(() => {
-  const now = new Date()
+  const now = calendarDate.value
   const monday = new Date(now)
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
   return ['一', '二', '三', '四', '五', '六', '日'].map((label, index) => {

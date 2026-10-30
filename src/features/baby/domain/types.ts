@@ -1,6 +1,6 @@
 /** Domain contracts are independent of Vue, storage and HTTP. Amounts are integer points. */
 export type TaskIcon = 'book' | 'brush' | 'ball' | 'plant' | 'art' | 'blocks'
-export type Category = '学习成长' | '生活习惯' | '运动健康'
+export type Category = '学习成长' | '生活习惯' | '运动健康' | '兴趣爱好'
 export type MemberRole = 'admin' | 'recorder'
 
 export interface Child {
@@ -25,7 +25,9 @@ export interface Task {
   icon: TaskIcon
   points: number
   category: Category
-  frequency: 'daily' | 'weekly' | 'custom'
+  frequency: 'daily' | 'once' | 'weekend' | 'weekly' | 'custom'
+  /** One-time tasks remain available from this local calendar date until completed. */
+  onceDate?: string
   /** JS weekdays: Sunday=0. Weekly selects one or more days too. */
   weekdays: number[]
   dailyLimit: number
@@ -58,6 +60,7 @@ export interface LedgerEntry {
     | 'refund'
     | 'reversal'
     | 'collection'
+    | 'scratch'
   taskId?: string
   taskIcon?: TaskIcon
   orderId?: string
@@ -71,7 +74,7 @@ export interface RewardOrder {
   name: string
   source: 'wish' | 'wheel' | 'collection'
   points: number
-  status: 'pending' | 'received' | 'cancelled'
+  image?: string
   createdAt: string
   memberName: string
 }
@@ -82,6 +85,25 @@ export interface CardGrant {
   icon: TaskIcon
   ledgerId: string
   consumedBy?: string
+}
+
+/** One uploaded image is shared by all pieces; no duplicate cropped images are stored. */
+export interface ScratchPiece {
+  index: number
+  entryId?: string
+  revealed: boolean
+}
+
+export interface ScratchActivity {
+  id: string
+  childId: string
+  name: string
+  image: string
+  gridSize: 2 | 3 | 4
+  pointsPerPiece: number
+  pieces: ScratchPiece[]
+  createdAt: string
+  completedAt?: string
 }
 
 export interface WheelPrize {
@@ -100,7 +122,7 @@ export interface Receipt {
 }
 
 export interface BabyState {
-  version: 1
+  version: 2
   activeChildId: string
   activeMemberId: string
   children: Child[]
@@ -109,7 +131,12 @@ export interface BabyState {
   rewards: Reward[]
   ledger: LedgerEntry[]
   orders: RewardOrder[]
-  cards: CardGrant[]
+  scratchActivities: ScratchActivity[]
+  /** Archived v1 data is retained for backups; it never participates in new rewards. */
+  legacy?: {
+    cards: CardGrant[]
+    cancelledOrders: (RewardOrder & { status: 'cancelled' })[]
+  }
   receipts: Receipt[]
 }
 
@@ -120,9 +147,10 @@ export type BabyCommand = { id: string } & (
   | { type: 'reverse', entryId: string, reason: string }
   | { type: 'redeem', rewardId: string }
   | { type: 'spin' }
-  | { type: 'redeemCollection' }
-  | { type: 'receiveOrder', orderId: string }
-  | { type: 'cancelOrder', orderId: string, reason: string }
+  | { type: 'saveScratch', activity: ScratchActivity }
+  | { type: 'buyScratchPiece', activityId: string, index: number }
+  | { type: 'revealScratchPiece', activityId: string, index: number }
+  | { type: 'redeemScratch', activityId: string }
   | { type: 'selectChild', childId: string }
   | { type: 'saveChild', child: Child }
   | { type: 'selectMember', memberId: string }

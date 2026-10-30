@@ -5,7 +5,7 @@ import BabyArt from '@/features/baby/components/BabyArt.vue'
 import BabyIcon from '@/features/baby/components/BabyIcon.vue'
 import BabyPage from '@/features/baby/components/BabyPage.vue'
 import TaskRow from '@/features/baby/components/TaskRow.vue'
-import { isScheduled } from '@/features/baby/domain/rules'
+import { isScheduled, TASK_CATEGORIES } from '@/features/baby/domain/rules'
 
 definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '任务' },
@@ -64,7 +64,7 @@ const done = computed(
     </view>
     <view class="mb-2 mt-4 flex flex-wrap gap-2">
       <button
-        v-for="item in ['全部', '学习成长', '生活习惯', '运动健康']"
+        v-for="item in ['全部', ...TASK_CATEGORIES]"
         :key="item"
         class="category-chip"
         :class="{ selected: category === item }"

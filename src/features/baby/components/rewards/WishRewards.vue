@@ -6,9 +6,12 @@ import BabyArt from '../BabyArt.vue'
 import BabyIcon from '../BabyIcon.vue'
 import BabySheet from '../BabySheet.vue'
 
+const props = withDefaults(defineProps<{ management?: boolean }>(), {
+  management: false,
+})
 const { child, points, rewards, send, busy, isAdmin } = useBaby()
 const selected = ref<Reward | null>(null)
-const manage = ref(false)
+const manage = ref(props.management)
 const editOpen = ref(false)
 const draft = reactive<Reward>({
   id: '',
@@ -71,7 +74,11 @@ async function redeem() {
       </view>
     </view>
     <view class="section-heading mb-3 mt-4">
-      <text class="section-title">我的小心愿</text><button v-if="isAdmin" class="text-link" @click="manage = !manage">
+      <text class="section-title">我的小心愿</text><button
+        v-if="isAdmin && !management"
+        class="text-link"
+        @click="manage = !manage"
+      >
         {{ manage ? "完成管理" : "管理" }}
         <BabyIcon :name="manage ? 'check' : 'next'" :size="14" />
       </button>
@@ -149,7 +156,7 @@ async function redeem() {
         </view>
         <view class="note my-4 justify-center">
           <BabyIcon name="clock" :size="17" /><text>
-            兑换成功后，等待家长发放奖励
+            确认后立即完成兑换，并自动记入成长记录
           </text>
         </view>
         <button class="button button-primary" :disabled="busy" @click="redeem">

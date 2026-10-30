@@ -2,12 +2,10 @@ import type { BabyCommand, BabyRepository, BabyState } from '../domain/types'
 import { computed, ref } from 'vue'
 import { createLocalRepository, STORAGE_KEY } from '../data/local-repository'
 import {
-  availableCards,
   balance,
-  CARD_ICONS,
   completedCount,
   dayKey,
-  isScheduled,
+  isTaskDue,
   streak,
   wheelRemaining,
 } from '../domain/rules'
@@ -20,6 +18,22 @@ const repository: BabyRepository = createLocalRepository({
 const state = ref<BabyState | null>(null)
 const busy = ref(false)
 const error = ref('')
+const calendarNow = ref(Date.now())
+let calendarTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleNextDay() {
+  if (calendarTimer)
+    return
+  const tomorrow = new Date()
+  tomorrow.setHours(24, 0, 0, 0)
+  calendarTimer = setTimeout(
+    () => {
+      calendarTimer = undefined
+      calendarNow.value = Date.now()
+      scheduleNextDay()
+    },
+    Math.max(1000, tomorrow.getTime() - Date.now() + 50),
+  )
+}
 let loading: Promise<void> | undefined
 
 export function newId(prefix = 'action') {
@@ -27,8 +41,10 @@ export function newId(prefix = 'action') {
 }
 
 export function useBaby() {
+  scheduleNextDay()
   // Refresh at entry (including tab changes) so another local page's changes are visible.
   async function refresh() {
+    calendarNow.value = Date.now()
     if (loading)
       return loading
     loading = repository
@@ -102,6 +118,7 @@ export function useBaby() {
   )
   return {
     state,
+    calendarDate: computed(() => new Date(calendarNow.value)),
     error,
     busy,
     child,
@@ -116,13 +133,18 @@ export function useBaby() {
       ledger.value
         .filter(
           e =>
-            dayKey(e.createdAt) === dayKey(new Date())
+            dayKey(e.createdAt) === dayKey(new Date(calendarNow.value))
             && e.kind === 'task'
             && !state.value?.ledger.some(r => r.reversesId === e.id),
         )
         .reduce((sum, e) => sum + e.points, 0),
     ),
-    todayTasks: computed(() => tasks.value.filter(t => isScheduled(t))),
+    todayTasks: computed(() =>
+      tasks.value.filter(
+        t =>
+          state.value && isTaskDue(state.value, t, new Date(calendarNow.value)),
+      ),
+    ),
     rewards: computed(
       () =>
         state.value?.rewards.filter(r => r.childId === child.value?.id) ?? [],
@@ -134,19 +156,24 @@ export function useBaby() {
           .slice()
           .reverse() ?? [],
     ),
-    streak: computed(() => (state.value ? streak(state.value) : 0)),
-    wheelRemaining: computed(() =>
-      state.value ? wheelRemaining(state.value) : 0,
+    streak: computed(() =>
+      state.value ? streak(state.value, new Date(calendarNow.value)) : 0,
     ),
-    cardCount: computed(() =>
+    wheelRemaining: computed(() =>
       state.value
-        ? CARD_ICONS.filter(
-          icon => availableCards(state.value!, icon).length > 0,
-        ).length
+        ? wheelRemaining(state.value, new Date(calendarNow.value))
         : 0,
     ),
+    scratchActivities: computed(
+      () =>
+        state.value?.scratchActivities.filter(
+          a => a.childId === child.value?.id,
+        ) ?? [],
+    ),
     completed: (taskId: string) =>
-      state.value ? completedCount(state.value, taskId) : 0,
+      state.value
+        ? completedCount(state.value, taskId, new Date(calendarNow.value))
+        : 0,
   }
 }
 
@@ -170,7 +197,7 @@ export function navigate(url: string) {
 export function displayDate(value: string) {
   const date = new Date(value)
   const prefix
-    = dayKey(date) === dayKey(new Date())
+    = dayKey(date) === dayKey(new Date(calendarNow.value))
       ? '今天'
       : `${date.getMonth() + 1}月${date.getDate()}日`
   return `${prefix} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`

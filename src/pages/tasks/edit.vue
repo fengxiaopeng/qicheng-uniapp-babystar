@@ -6,7 +6,13 @@ import { newId, useBaby } from '@/features/baby/application/use-baby'
 import BabyArt from '@/features/baby/components/BabyArt.vue'
 import BabyIcon from '@/features/baby/components/BabyIcon.vue'
 import BabyPage from '@/features/baby/components/BabyPage.vue'
-import { CARD_ICONS, ICON_LABELS, TASK_EMOJI } from '@/features/baby/domain/rules'
+import {
+  dayKey,
+  ICON_LABELS,
+  TASK_CATEGORIES,
+  TASK_EMOJI,
+  TASK_ICONS,
+} from '@/features/baby/domain/rules'
 
 definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '任务设置' },
@@ -14,7 +20,7 @@ definePage({
 
 const { state, child, busy, send, refresh, isAdmin } = useBaby()
 const editing = ref(false)
-const categories: Category[] = ['学习成长', '生活习惯', '运动健康']
+const categories: Category[] = [...TASK_CATEGORIES]
 const draft = reactive<Task>({
   id: newId('task'),
   childId: '',
@@ -24,6 +30,7 @@ const draft = reactive<Task>({
   points: 10,
   category: '学习成长',
   frequency: 'daily',
+  onceDate: dayKey(new Date()),
   weekdays: [1],
   dailyLimit: 1,
   reminder: false,
@@ -56,7 +63,7 @@ async function save() {
       task: {
         ...draft,
         points: Number(draft.points),
-        dailyLimit: Number(draft.dailyLimit),
+        dailyLimit: draft.frequency === 'once' ? 1 : Number(draft.dailyLimit),
       },
     })
   ) {
@@ -66,7 +73,7 @@ async function save() {
 async function archive() {
   const answer = await uni.showModal({
     title: '停用这个任务？',
-    content: '历史记分和已获得的卡片会完整保留。',
+    content: '历史记分会完整保留。',
     confirmColor: '#34785c',
   })
   if (
@@ -87,7 +94,7 @@ async function archive() {
       <text class="field-label">选择任务图标</text>
       <view class="flex justify-between gap-2">
         <button
-          v-for="icon in CARD_ICONS"
+          v-for="icon in TASK_ICONS"
           :key="icon"
           class="icon-choice"
           :class="{ selected: draft.icon === icon }"
@@ -135,17 +142,22 @@ async function archive() {
     </view>
     <view class="card mb-3">
       <text class="field-label">完成规则</text>
-      <view class="form-row">
-        <text>重复频率</text><view class="segmented subtle w-64%">
+      <view class="form-row !block !border-b-0">
+        <text class="mb-2 block">执行周期</text><view class="segmented subtle grid-cols-2 !grid !gap-1">
           <button
             v-for="item in [
               ['daily', '每天'],
-              ['weekly', '每周'],
-              ['custom', '自定义'],
+              ['once', '单次'],
+              ['weekend', '周末'],
+              ['custom', '指定星期'],
             ] as const"
             :key="item[0]"
             class="segment"
-            :class="{ active: draft.frequency === item[0] }"
+            :class="{
+              active:
+                draft.frequency === item[0]
+                || (draft.frequency === 'weekly' && item[0] === 'custom'),
+            }"
             @click="draft.frequency = item[0]"
           >
             {{ item[1] }}
@@ -153,7 +165,7 @@ async function archive() {
         </view>
       </view>
       <view
-        v-if="draft.frequency !== 'daily'"
+        v-if="['weekly', 'custom'].includes(draft.frequency)"
         class="my-3 flex justify-between gap-1"
       >
         <button
@@ -166,7 +178,29 @@ async function archive() {
           {{ label }}
         </button>
       </view>
-      <view class="form-row">
+      <view v-if="draft.frequency === 'once'" class="form-row">
+        <text>执行日期</text><picker
+          mode="date"
+          :value="draft.onceDate"
+          @change="draft.onceDate = $event.detail.value"
+        >
+          <view class="flex items-center gap-2">
+            {{ draft.onceDate }} <BabyIcon name="next" :size="15" />
+          </view>
+        </picker>
+      </view>
+      <view class="note my-3">
+        {{
+          draft.frequency === "daily"
+            ? "设置一次，每天自动安排。当天完成后，次日会自动重新开始，不用每天再设置。"
+            : draft.frequency === "once"
+              ? "指定日期起执行一次，完成即结束。未完成时会继续保留，撤销后可重新完成。"
+              : draft.frequency === "weekend"
+                ? "每周六、周日自动安排，工作日不出现，不需要每周重新设置。"
+                : "保存后按选定的星期持续自动安排。"
+        }}
+      </view>
+      <view v-if="draft.frequency !== 'once'" class="form-row">
         <text>每天最多记录</text><picker
           :range="Array.from({ length: 20 }, (_, i) => `${i + 1} 次`)"
           :value="draft.dailyLimit - 1"

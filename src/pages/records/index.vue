@@ -18,7 +18,7 @@ definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '成长记录' },
 })
 
-const { state, ledger, member, busy, send } = useBaby()
+const { state, ledger, member, busy, send, calendarDate } = useBaby()
 const tab = ref('stats')
 const period = ref('week')
 const offset = ref(0)
@@ -32,7 +32,7 @@ onLoad((options) => {
     tab.value = 'ledger'
 })
 const range = computed(() => {
-  const today = new Date()
+  const today = calendarDate.value
   const start = new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -77,7 +77,7 @@ const earned = computed(() =>
 )
 const spent = computed(() =>
   periodEntries.value
-    .filter(e => ['redeem', 'spin', 'refund'].includes(e.kind))
+    .filter(e => ['redeem', 'spin', 'scratch', 'refund'].includes(e.kind))
     .reduce((sum, e) => sum - e.points, 0),
 )
 const filtered = computed(() =>
@@ -88,7 +88,7 @@ const filtered = computed(() =>
       = filter.value === '全部类型'
         || (filter.value === '获得积分' && entry.kind === 'task')
         || (filter.value === '积分消耗'
-          && ['redeem', 'spin'].includes(entry.kind))
+          && ['redeem', 'spin', 'scratch'].includes(entry.kind))
         || (filter.value === '撤销与退款'
           && ['reversal', 'refund'].includes(entry.kind))
     return matchMember && matchType

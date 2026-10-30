@@ -15,7 +15,18 @@ definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '我的' },
 })
 
-const { state, child, member, ledger, orders, points, streak } = useBaby()
+const {
+  state,
+  child,
+  member,
+  ledger,
+  orders,
+  points,
+  streak,
+  tasks,
+  rewards,
+  isAdmin,
+} = useBaby()
 const settings = ref(false)
 const about = ref(false)
 const earned = computed(() =>
@@ -24,9 +35,6 @@ const earned = computed(() =>
       e => e.kind === 'task' && state.value && !isReversed(state.value, e.id),
     )
     .reduce((sum, e) => sum + e.points, 0),
-)
-const pending = computed(
-  () => orders.value.filter(o => o.status === 'pending').length,
 )
 async function exportData() {
   if (!state.value)
@@ -77,11 +85,42 @@ async function exportData() {
         <text class="block text-25px text-primary font-bold">{{ streak }}</text><text class="muted mt-1 block text-11px">连续成长天数</text>
       </view><view class="w-1px bg-#eef0e7" /><view class="text-center">
         <text class="block text-25px text-primary font-bold">
-          {{
-            orders.filter((o) => o.status === "received").length
-          }}
+          {{ orders.length }}
         </text><text class="muted mt-1 block text-11px">实现的小心愿</text>
       </view>
+    </view>
+    <view v-if="isAdmin" class="card mt-5">
+      <view class="section-title">
+        家长管理
+      </view><text class="muted mt-2 block text-11px">
+        任务设置一次，按周期自动执行，让陪伴更轻松。
+      </text>
+      <view class="grid grid-cols-2 mt-4 gap-3">
+        <button class="parent-entry" @click="navigate('/pages/manage/tasks')">
+          <view class="menu-icon">
+            <BabyIcon name="tasks" />
+          </view><text class="mt-3 block text-15px font-bold">任务设置</text><text class="muted mt-1 block text-11px">
+            {{ tasks.length }} 个任务 · 自动安排
+          </text>
+        </button>
+        <button class="parent-entry" @click="navigate('/pages/manage/rewards')">
+          <view class="menu-icon !bg-#fff0d9 !text-#b38d4e">
+            <BabyIcon name="gift" />
+          </view><text class="mt-3 block text-15px font-bold">奖励设置</text><text class="muted mt-1 block text-11px">
+            {{ rewards.length }} 个心愿 · 图片刮卡
+          </text>
+        </button>
+      </view>
+      <button
+        class="choice-row mt-2 !border-b-0"
+        @click="navigate('/pages/children/index')"
+      >
+        <BabyIcon name="user" :size="19" /><text
+          class="ml-2 flex-1 text-left text-13px"
+        >
+          宝宝档案与成长计划
+        </text><BabyIcon name="next" :size="16" />
+      </button>
     </view>
     <view class="card mt-5 !py-1">
       <button class="choice-row" @click="navigate('/pages/family/index')">
@@ -100,8 +139,6 @@ async function exportData() {
           <BabyIcon name="gift" />
         </view><text class="ml-3 flex-1 text-left text-14px font-semibold">
           我的兑换
-        </text><text v-if="pending" class="tag mr-2 !bg-#fff0d9 !text-#b68135">
-          {{ pending }} 份待领取
         </text><BabyIcon name="next" :size="17" />
       </button>
       <button
@@ -190,5 +227,12 @@ async function exportData() {
   border-radius: 12px;
   background: #e3f0e6;
   color: #4a8060;
+}
+.baby-page .parent-entry {
+  padding: 15px 12px;
+  border: 1px solid #e5ecdf;
+  border-radius: 15px;
+  background: #f5f8ef;
+  text-align: left;
 }
 </style>

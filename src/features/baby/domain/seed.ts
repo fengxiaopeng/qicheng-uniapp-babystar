@@ -30,7 +30,7 @@ export function createDemoState(now = new Date()): BabyState {
     archived: false,
   })
   return {
-    version: 1,
+    version: 2,
     activeChildId: 'dodo',
     activeMemberId: 'mom',
     children: [
@@ -81,7 +81,7 @@ export function createDemoState(now = new Date()): BabyState {
         '画一幅想象的画',
         'art',
         10,
-        '学习成长',
+        '兴趣爱好',
         '让小小的灵感自由生长',
       ),
     ],
@@ -177,17 +177,25 @@ export function createDemoState(now = new Date()): BabyState {
         name: '一份冰淇淋',
         source: 'wish',
         points: 50,
-        status: 'received',
         createdAt: iso(-1, 16),
         memberName: '爸爸',
       },
     ],
-    cards: (['book', 'brush', 'ball', 'plant'] as const).map((icon, index) => ({
-      id: `seed-${icon}`,
-      childId: 'dodo',
-      icon,
-      ledgerId: `history-${index}`,
-    })),
+    scratchActivities: [
+      {
+        id: 'demo-scratch',
+        childId: 'dodo',
+        name: '周末去公园',
+        image: '/static/baby/park.svg',
+        gridSize: 2,
+        pointsPerPiece: 10,
+        pieces: Array.from({ length: 4 }, (_, index) => ({
+          index,
+          revealed: false,
+        })),
+        createdAt: iso(0),
+      },
+    ],
     receipts: [],
   }
 }

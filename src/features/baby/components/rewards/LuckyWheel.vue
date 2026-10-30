@@ -115,7 +115,8 @@ onUnmounted(stopAnimation)
     </button>
     <view class="note">
       <BabyIcon name="help" :size="17" /><text>
-        中奖后可在兑换记录中领取，每天最多参与 {{ WHEEL_DAILY_LIMIT }} 次。
+        中奖即完成兑换，可在兑换记录中查看，每天最多参与
+        {{ WHEEL_DAILY_LIMIT }} 次。
       </text>
     </view>
 
@@ -148,7 +149,7 @@ onUnmounted(stopAnimation)
       >
         查看兑换记录
       </button><text class="footnote">
-        每次转盘费用为{{ WHEEL_COST }}积分，取消奖品不退回转盘费用。
+        每次转盘费用为{{ WHEEL_COST }}积分，抽奖结果已保存，中奖即完成兑换。
       </text>
     </BabySheet>
   </view>

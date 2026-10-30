@@ -1,12 +1,11 @@
-import type { BabyCommand, BabyState } from './types'
+import type { BabyCommand, BabyState, Task } from './types'
 import { describe, expect, it } from 'vitest'
 import { createLocalRepository } from '../data/local-repository'
 import { executeCommand } from './commands'
 import {
-  availableCards,
   balance,
-  CARD_ICONS,
   completedCount,
+  isTaskDue,
   WHEEL_PRIZES,
   wheelRemaining,
 } from './rules'
@@ -14,12 +13,34 @@ import { createDemoState } from './seed'
 
 const now = new Date('2026-10-29T12:00:00')
 const initial = () => createDemoState(now)
-function run(state: BabyState, command: BabyCommand, random = () => 0) {
-  return executeCommand(state, command, now, random)
+function run(
+  state: BabyState,
+  command: BabyCommand,
+  date = now,
+  random = () => 0,
+) {
+  return executeCommand(state, command, date, random)
+}
+function setTask(state: BabyState, changes: Partial<Task>) {
+  return run(state, {
+    id: 'configure-task',
+    type: 'saveTask',
+    task: { ...state.tasks[0], ...changes },
+  }).state
+}
+function port(raw: unknown = initial()) {
+  let saved = raw
+  return {
+    read: () =>
+      saved === undefined ? undefined : JSON.parse(JSON.stringify(saved)),
+    write: (s: BabyState) => {
+      saved = JSON.parse(JSON.stringify(s))
+    },
+  }
 }
 
-describe('baby points atomic business transactions', () => {
-  it('starts with a consistent demo balance and awards points plus a card exactly once', () => {
+describe('task scheduling and points', () => {
+  it('records points once for a retry and enforces the daily limit', () => {
     const state = initial()
     expect(balance(state)).toBe(128)
     const command: BabyCommand = {
@@ -30,239 +51,349 @@ describe('baby points atomic business transactions', () => {
     const first = run(state, command)
     const retry = run(first.state, command)
     expect(balance(retry.state)).toBe(138)
-    expect(
-      retry.state.cards.filter(c => c.ledgerId === first.receipt.entryId),
-    ).toHaveLength(1)
-    expect(completedCount(retry.state, 'reading', now)).toBe(1)
     expect(retry.receipt).toEqual(first.receipt)
+    expect(completedCount(retry.state, 'reading', now)).toBe(1)
+    expect(() => run(retry.state, { ...command, id: 'another' })).toThrow(
+      '已经完成',
+    )
     expect(balance(state)).toBe(128)
   })
-
-  it('rejects another completion at the daily limit without mutating the snapshot', () => {
+  it('reuses a saved daily task on the next day without recreating it', () => {
     const first = run(initial(), {
-      id: 'one',
+      id: 'thursday',
       type: 'completeTask',
       taskId: 'reading',
     })
-    const before = JSON.stringify(first.state)
-    expect(() =>
-      run(first.state, { id: 'two', type: 'completeTask', taskId: 'reading' }),
-    ).toThrow('今天已经完成')
-    expect(JSON.stringify(first.state)).toBe(before)
+    const tomorrow = new Date('2026-10-30T12:00:00')
+    expect(isTaskDue(first.state, first.state.tasks[0], tomorrow)).toBe(true)
+    const next = run(
+      first.state,
+      { id: 'friday', type: 'completeTask', taskId: 'reading' },
+      tomorrow,
+    )
+    expect(balance(next.state)).toBe(148)
+    expect(next.state.tasks).toEqual(first.state.tasks)
+    expect(completedCount(next.state, 'reading', tomorrow)).toBe(1)
   })
-
-  it('reverses a completion by a compensating entry, removes its card and allows a new completion', () => {
+  it('runs an overdue one-time task once and hides it on later days until reversed', () => {
+    const state = setTask(initial(), {
+      frequency: 'once',
+      onceDate: '2026-10-30',
+      weekdays: [],
+    })
+    expect(isTaskDue(state, state.tasks[0], now)).toBe(false)
+    const date = new Date('2026-10-31T12:00:00')
+    const first = run(
+      state,
+      { id: 'once', type: 'completeTask', taskId: 'reading' },
+      date,
+    )
+    const later = new Date('2026-11-01T12:00:00')
+    expect(isTaskDue(first.state, first.state.tasks[0], later)).toBe(false)
+    expect(() =>
+      run(
+        first.state,
+        { id: 'repeat', type: 'completeTask', taskId: 'reading' },
+        later,
+      ),
+    ).toThrow('已经完成')
+    const undone = run(
+      first.state,
+      {
+        id: 'undo-once',
+        type: 'reverse',
+        entryId: first.receipt.entryId!,
+        reason: '误记',
+      },
+      later,
+    )
+    expect(isTaskDue(undone.state, undone.state.tasks[0], later)).toBe(true)
+  })
+  it('only schedules weekend tasks on Saturday and Sunday, with independent daily limits', () => {
+    const state = setTask(initial(), { frequency: 'weekend', weekdays: [] })
+    expect(() =>
+      run(state, { id: 'weekday', type: 'completeTask', taskId: 'reading' }),
+    ).toThrow('今天不需要')
+    const sat = run(
+      state,
+      { id: 'sat', type: 'completeTask', taskId: 'reading' },
+      new Date('2026-10-31T12:00:00'),
+    )
+    const sun = run(
+      sat.state,
+      { id: 'sun', type: 'completeTask', taskId: 'reading' },
+      new Date('2026-11-01T12:00:00'),
+    )
+    expect(balance(sun.state)).toBe(148)
+  })
+  it('accepts hobbies, validates once dates and prevents invalid repetition rules', () => {
+    expect(setTask(initial(), { category: '兴趣爱好' }).tasks[0].category).toBe(
+      '兴趣爱好',
+    )
+    expect(() =>
+      setTask(initial(), { frequency: 'once', onceDate: '2026-02-31' }),
+    ).toThrow('有效执行日期')
+    expect(() =>
+      setTask(initial(), {
+        frequency: 'once',
+        onceDate: '2026-11-01',
+        dailyLimit: 2,
+      }),
+    ).toThrow('只能执行一次')
+    expect(() =>
+      setTask(initial(), { frequency: 'weekly', weekdays: [] }),
+    ).toThrow('重复日期')
+  })
+  it('retains historical task values and reverses by a compensating record', () => {
     const first = run(initial(), {
       id: 'one',
       type: 'completeTask',
       taskId: 'reading',
     })
-    const reverse = run(first.state, {
+    const edited = setTask(first.state, { name: '阅读新任务', points: 50 })
+    expect(
+      edited.ledger.find(e => e.id === first.receipt.entryId),
+    ).toMatchObject({ title: '自主阅读20分钟', points: 10 })
+    const undone = run(edited, {
       id: 'undo',
       type: 'reverse',
       entryId: first.receipt.entryId!,
       reason: '重复记录',
     })
-    expect(balance(reverse.state)).toBe(128)
+    expect(balance(undone.state)).toBe(128)
     expect(
-      reverse.state.ledger.some(e => e.id === first.receipt.entryId),
+      undone.state.ledger.some(e => e.reversesId === first.receipt.entryId),
     ).toBe(true)
-    expect(
-      reverse.state.ledger.find(e => e.reversesId === first.receipt.entryId)
-        ?.note,
-    ).toBe('重复记录')
-    expect(
-      reverse.state.cards.some(c => c.ledgerId === first.receipt.entryId),
-    ).toBe(false)
-    expect(completedCount(reverse.state, 'reading', now)).toBe(0)
     expect(() =>
-      run(reverse.state, {
+      run(undone.state, {
         id: 'undo-again',
         type: 'reverse',
         entryId: first.receipt.entryId!,
-        reason: 'again',
+        reason: '重复',
       }),
     ).toThrow('已经撤销')
-    expect(
-      balance(
-        run(reverse.state, {
-          id: 'new-completion',
-          type: 'completeTask',
-          taskId: 'reading',
-        }).state,
-      ),
-    ).toBe(138)
   })
-
-  it('retains historical task name and amount when a task is edited', () => {
-    const first = run(initial(), {
-      id: 'one',
-      type: 'completeTask',
-      taskId: 'reading',
-    })
-    const task = { ...first.state.tasks[0], name: '阅读新任务', points: 50 }
-    const saved = run(first.state, { id: 'edit', type: 'saveTask', task })
-    expect(
-      saved.state.ledger.find(e => e.id === first.receipt.entryId),
-    ).toMatchObject({ title: '自主阅读20分钟', points: 10 })
-  })
-
-  it('checks scheduled weekdays and prevents archived or other-child task completion', () => {
+  it('prevents cross-child or archived task execution', () => {
     const state = initial()
-    state.tasks[0].frequency = 'custom'
-    state.tasks[0].weekdays = [0]
-    expect(() =>
-      run(state, { id: 'wrong-day', type: 'completeTask', taskId: 'reading' }),
-    ).toThrow('今天不需要')
     state.activeChildId = 'milo'
     expect(() =>
       run(state, {
         id: 'wrong-child',
         type: 'completeTask',
-        taskId: 'brushing',
+        taskId: 'reading',
       }),
     ).toThrow('今天不需要')
     state.activeChildId = 'dodo'
-    state.tasks[1].archived = true
+    state.tasks[0].archived = true
     expect(() =>
-      run(state, { id: 'archived', type: 'completeTask', taskId: 'brushing' }),
+      run(state, { id: 'archived', type: 'completeTask', taskId: 'reading' }),
     ).toThrow('今天不需要')
   })
+})
 
-  it('rejects insufficient balance and refunds a cancelled wish only once', () => {
+describe('immediately completed rewards', () => {
+  it('deducts a wish once and creates a completed exchange without statuses', () => {
     expect(() =>
       run(initial(), { id: 'expensive', type: 'redeem', rewardId: 'blocks' }),
     ).toThrow('积分还不够')
-    const redeemed = run(initial(), {
+    const command: BabyCommand = {
       id: 'redeem',
       type: 'redeem',
       rewardId: 'icecream',
-    })
-    expect(balance(redeemed.state)).toBe(78)
-    expect(redeemed.state.orders.at(-1)?.status).toBe('pending')
-    const cancelled = run(redeemed.state, {
-      id: 'cancel',
-      type: 'cancelOrder',
-      orderId: 'redeem-order',
-      reason: '改变心愿',
-    })
-    expect(balance(cancelled.state)).toBe(128)
-    expect(() =>
-      run(cancelled.state, {
-        id: 'cancel-twice',
-        type: 'cancelOrder',
-        orderId: 'redeem-order',
-        reason: '再次取消',
-      }),
-    ).toThrow('只能取消')
+    }
+    const first = run(initial(), command)
+    const retry = run(first.state, command)
+    expect(balance(retry.state)).toBe(78)
+    expect(
+      retry.state.orders.filter(o => o.id === 'redeem-order'),
+    ).toHaveLength(1)
+    expect(retry.state.orders.at(-1)).not.toHaveProperty('status')
   })
-
-  it('cannot cancel an already received reward', () => {
-    const redeemed = run(initial(), {
-      id: 'redeem',
-      type: 'redeem',
-      rewardId: 'icecream',
+  it('saves a winning wheel reward immediately and still charges misses and enforces limits', () => {
+    expect(WHEEL_PRIZES.reduce((sum, p) => sum + p.weight, 0)).toBe(100)
+    const first = run(initial(), { id: 'win', type: 'spin' })
+    expect(first.state.orders.at(-1)).toMatchObject({
+      name: WHEEL_PRIZES[0].name,
+      source: 'wheel',
     })
-    const received = run(redeemed.state, {
-      id: 'receive',
-      type: 'receiveOrder',
-      orderId: 'redeem-order',
-    })
-    expect(() =>
-      run(received.state, {
-        id: 'cancel',
-        type: 'cancelOrder',
-        orderId: 'redeem-order',
-        reason: 'late',
-      }),
-    ).toThrow('只能取消')
-  })
-
-  it('persists every wheel result, charges misses, enforces daily limits and restores the next day', () => {
-    let state = initial()
-    for (let i = 0; i < 3; i++)
-      state = run(state, { id: `spin-${i}`, type: 'spin' }, () => 0.3).state
+    expect(first.state.orders.at(-1)).not.toHaveProperty('status')
+    let state = first.state
+    for (let i = 0; i < 2; i++) {
+      state = run(
+        state,
+        { id: `miss-${i}`, type: 'spin' },
+        now,
+        () => 0.3,
+      ).state
+    }
     expect(balance(state)).toBe(98)
-    expect(state.ledger.filter(e => e.kind === 'spin')).toHaveLength(3)
-    expect(state.orders).toHaveLength(1) // Only the original demo order: .3 is the miss sector.
     expect(wheelRemaining(state, now)).toBe(0)
+    expect(state.orders).toHaveLength(2)
     expect(() => run(state, { id: 'fourth', type: 'spin' })).toThrow(
       '机会用完',
     )
     expect(wheelRemaining(state, new Date('2026-10-30T12:00:00'))).toBe(3)
   })
+})
 
-  it('matches displayed wheel probabilities and never refunds a consumed draw fee', () => {
-    expect(WHEEL_PRIZES.reduce((sum, p) => sum + p.weight, 0)).toBe(100)
-    const spin = run(initial(), { id: 'spin', type: 'spin' }, () => 0)
-    expect(spin.receipt.prizeIndex).toBe(0)
-    expect(spin.state.orders.at(-1)?.name).toBe(WHEEL_PRIZES[0].name)
-    const cancelled = run(spin.state, {
-      id: 'cancel',
-      type: 'cancelOrder',
-      orderId: 'spin-order',
-      reason: '不需要贴纸',
+describe('uploaded image scratch rewards', () => {
+  it('charges each tile once, retains paid progress after reloading and blocks unpaid revealing', async () => {
+    const storage = port()
+    const repository = createLocalRepository(storage, () => now)
+    await expect(
+      repository.execute({
+        id: 'free',
+        type: 'revealScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
+      }),
+    ).rejects.toThrow('先支付')
+    await Promise.all([
+      repository.execute({
+        id: 'buy-a',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
+      }),
+      repository.execute({
+        id: 'buy-b',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
+      }),
+    ])
+    const state = await createLocalRepository(storage).load()
+    expect(balance(state)).toBe(118)
+    expect(state.scratchActivities[0].pieces[0]).toMatchObject({
+      entryId: 'buy-a-entry',
+      revealed: false,
     })
-    expect(balance(cancelled.state)).toBe(118)
-    expect(wheelRemaining(cancelled.state, now)).toBe(2)
+    expect(state.ledger.filter(e => e.kind === 'scratch')).toHaveLength(1)
   })
-
-  it('requires all six distinct cards, consumes one set without points, and refunds cards on cancellation', () => {
-    const state = initial()
+  it('requires every tile, redeems with no additional charge and cannot redeem twice', () => {
+    let state = initial()
     expect(() =>
-      run(state, { id: 'missing', type: 'redeemCollection' }),
-    ).toThrow('没有集齐')
-    const art = run(state, {
-      id: 'art',
-      type: 'completeTask',
-      taskId: 'drawing',
+      run(state, {
+        id: 'early',
+        type: 'redeemScratch',
+        activityId: 'demo-scratch',
+      }),
+    ).toThrow('所有格子')
+    for (let index = 0; index < 4; index++) {
+      state = run(state, {
+        id: `buy-${index}`,
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index,
+      }).state
+      state = run(state, {
+        id: `reveal-${index}`,
+        type: 'revealScratchPiece',
+        activityId: 'demo-scratch',
+        index,
+      }).state
+    }
+    expect(balance(state)).toBe(88)
+    const redeemed = run(state, {
+      id: 'exchange',
+      type: 'redeemScratch',
+      activityId: 'demo-scratch',
     })
-    art.state.tasks.find(t => t.id === 'tidying')!.dailyLimit = 2
-    const toys = run(art.state, {
-      id: 'toys',
-      type: 'completeTask',
-      taskId: 'tidying',
+    expect(balance(redeemed.state)).toBe(88)
+    expect(redeemed.state.orders.at(-1)).toMatchObject({
+      source: 'collection',
+      points: 40,
+      image: '/static/baby/park.svg',
     })
-    const before = balance(toys.state)
-    const redeemed = run(toys.state, {
-      id: 'collection',
-      type: 'redeemCollection',
-    })
-    expect(balance(redeemed.state)).toBe(before)
-    expect(
-      CARD_ICONS.every(
-        icon => availableCards(redeemed.state, icon).length === 0,
-      ),
-    ).toBe(true)
+    expect(redeemed.state.orders.at(-1)).not.toHaveProperty('status')
     expect(() =>
       run(redeemed.state, {
-        id: 'undo',
-        type: 'reverse',
-        entryId: art.receipt.entryId!,
-        reason: '误记',
+        id: 'again',
+        type: 'redeemScratch',
+        activityId: 'demo-scratch',
       }),
-    ).toThrow('卡片已经兑换')
-    const cancelled = run(redeemed.state, {
-      id: 'cancel',
-      type: 'cancelOrder',
-      orderId: 'collection-order',
-      reason: '改天再去',
-    })
-    expect(
-      CARD_ICONS.every(
-        icon => availableCards(cancelled.state, icon).length === 1,
-      ),
-    ).toBe(true)
+    ).toThrow('已经兑换')
   })
-
-  it('rejects normalized invalid birth dates and future birthdays', () => {
+  it('rejects insufficient points, invalid tile indices and cross-child purchases without changing balances', () => {
     const state = initial()
-    const child = { ...state.children[0], birthday: '2020-02-31' }
-    expect(() => run(state, { id: 'invalid-date', type: 'saveChild', child })).toThrow('有效的出生日期')
-    expect(() => run(state, { id: 'future-date', type: 'saveChild', child: { ...child, birthday: '2027-01-01' } })).toThrow('有效的出生日期')
+    state.scratchActivities[0].pointsPerPiece = 999
+    expect(() =>
+      run(state, {
+        id: 'cost',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
+      }),
+    ).toThrow('积分还不够')
+    expect(() =>
+      run(state, {
+        id: 'invalid',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: -1,
+      }),
+    ).toThrow('格子不存在')
+    state.activeChildId = 'milo'
+    expect(() =>
+      run(state, {
+        id: 'other',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
+      }),
+    ).toThrow('不存在')
+    expect(balance(state, 'dodo')).toBe(128)
   })
+  it('only lets admins configure images and rebuilds tile definitions rather than trusting submitted progress', () => {
+    const state = initial()
+    const activity = {
+      ...state.scratchActivities[0],
+      id: 'new-image',
+      gridSize: 3 as const,
+      image: 'data:image/png;base64,aGVsbG8=',
+      pieces: [{ index: 0, revealed: true, entryId: 'fake' }],
+    }
+    const saved = run(state, { id: 'save', type: 'saveScratch', activity })
+    expect(saved.state.scratchActivities.at(-1)?.pieces).toHaveLength(9)
+    expect(
+      saved.state.scratchActivities
+        .at(-1)
+        ?.pieces
+        .every(p => !p.entryId && !p.revealed),
+    ).toBe(true)
+    state.activeMemberId = 'dad'
+    expect(() =>
+      run(state, { id: 'not-admin', type: 'saveScratch', activity }),
+    ).toThrow('管理员')
+    state.activeMemberId = 'mom'
+    expect(() =>
+      run(state, {
+        id: 'url',
+        type: 'saveScratch',
+        activity: { ...activity, image: 'https://example.com/photo.jpg' },
+      }),
+    ).toThrow('请选择')
+  })
+  it('locks image, grid and pricing once a scratch reward has started', () => {
+    const state = run(initial(), {
+      id: 'buy',
+      type: 'buyScratchPiece',
+      activityId: 'demo-scratch',
+      index: 0,
+    }).state
+    expect(() =>
+      run(state, {
+        id: 'edit',
+        type: 'saveScratch',
+        activity: { ...state.scratchActivities[0], gridSize: 4 },
+      }),
+    ).toThrow('已经开始')
+    expect(balance(state)).toBe(118)
+  })
+})
 
-  it('enforces member permissions and keeps at least one administrator', () => {
+describe('family permissions and persistence', () => {
+  it('retains the last admin, historical names and independent child balances', () => {
     const state = initial()
     expect(() =>
       run(state, {
@@ -283,90 +414,100 @@ describe('baby points atomic business transactions', () => {
         reason: '误记',
       }),
     ).toThrow('自己记录')
-    expect(
-      balance(
-        run(state, { id: 'record', type: 'completeTask', taskId: 'reading' })
-          .state,
-      ),
-    ).toBe(138)
-  })
-
-  it('keeps both child data and historical actor names independent of current selection', () => {
-    const state = initial()
-    const first = run(state, {
+    const recorded = run(state, {
       id: 'record',
       type: 'completeTask',
       taskId: 'reading',
     })
-    const switched = run(first.state, {
+    const switched = run(recorded.state, {
       id: 'switch',
       type: 'selectChild',
       childId: 'milo',
     })
     expect(balance(switched.state)).toBe(0)
     expect(balance(switched.state, 'dodo')).toBe(138)
-    const renamed = run(switched.state, {
-      id: 'rename',
-      type: 'saveMember',
-      member: { ...state.members[0], name: '妈妈新称呼' },
-    })
-    expect(
-      renamed.state.ledger.find(e => e.id === first.receipt.entryId)
-        ?.memberName,
-    ).toBe('妈妈')
+    expect(switched.state.ledger.at(-1)?.memberName).toBe('爸爸')
   })
-})
-
-describe('local repository persistence boundary', () => {
-  function port(raw: unknown = initial()) {
-    let saved = raw
-    return {
-      read: () =>
-        saved === undefined ? undefined : JSON.parse(JSON.stringify(saved)),
-      write: (s: BabyState) => {
-        saved = JSON.parse(JSON.stringify(s))
-      },
+  it('rejects normalized invalid and future birth dates', () => {
+    const state = initial()
+    for (const birthday of ['2020-02-31', '2027-01-01']) {
+      expect(() =>
+        run(state, {
+          id: birthday,
+          type: 'saveChild',
+          child: { ...state.children[0], birthday },
+        }),
+      ).toThrow('有效的出生日期')
     }
-  }
-  it('serializes two competing submissions at a one-per-day limit', async () => {
+  })
+  it('serializes competing task writes and keeps balances after reloading', async () => {
     const storage = port()
     const repository = createLocalRepository(storage, () => now)
-    const results = await Promise.allSettled([
-      repository.execute({ id: 'a', type: 'completeTask', taskId: 'reading' }),
-      repository.execute({ id: 'b', type: 'completeTask', taskId: 'reading' }),
-    ])
+    const results = await Promise.allSettled(
+      ['a', 'b'].map(id =>
+        repository.execute({ id, type: 'completeTask', taskId: 'reading' }),
+      ),
+    )
     expect(results.map(r => r.status)).toEqual(['fulfilled', 'rejected'])
-    expect(balance(await repository.load())).toBe(138)
     expect(balance(await createLocalRepository(storage).load())).toBe(138)
   })
-  it('does not overwrite unknown versions or malformed storage', async () => {
-    const raw = { version: 2, privateData: 'preserve-me' }
+  it('migrates v1 without losing points, task schedules or cancelled exchange history', async () => {
+    const current = initial()
+    const { scratchActivities: _activities, ...base } = current
+    const old = {
+      ...base,
+      version: 1,
+      cards: [
+        { id: 'card', childId: 'dodo', icon: 'book', ledgerId: 'history-0' },
+      ],
+      orders: [
+        { ...current.orders[0], status: 'pending' },
+        { ...current.orders[0], id: 'cancelled', status: 'cancelled' },
+      ],
+    }
+    const storage = port(old)
+    const migrated = await createLocalRepository(storage).load()
+    expect(migrated.version).toBe(2)
+    expect(balance(migrated)).toBe(128)
+    expect(migrated.ledger).toEqual(current.ledger)
+    expect(migrated.tasks).toEqual(current.tasks)
+    expect(migrated.orders).toHaveLength(1)
+    expect(migrated.orders[0]).not.toHaveProperty('status')
+    expect(migrated.legacy?.cancelledOrders[0].id).toBe('cancelled')
+    expect(migrated.legacy?.cards).toHaveLength(1)
+    expect(migrated.scratchActivities).toEqual([])
+    expect((storage.read() as BabyState).version).toBe(2)
+    expect(await createLocalRepository(storage).load()).toEqual(migrated)
+  })
+  it('preserves corrupt and future snapshots instead of overwriting them', async () => {
+    const raw = { version: 3, preserve: 'family-data' }
     const storage = port(raw)
     await expect(createLocalRepository(storage).load()).rejects.toThrow(
       '不兼容',
     )
     expect(storage.read()).toEqual(raw)
-    const malformed = initial()
-    malformed.ledger[0].points = Number.NaN
-    await expect(createLocalRepository(port(malformed)).load()).rejects.toThrow(
+    const invalid = initial()
+    invalid.ledger[0].points = Number.NaN
+    await expect(createLocalRepository(port(invalid)).load()).rejects.toThrow(
       '校验未通过',
     )
   })
-  it('reports storage write failure and does not consume points', async () => {
-    const raw = initial()
+  it('does not consume points when a persistent write fails', async () => {
+    const state = initial()
     const storage = {
-      read: () => raw,
+      read: () => state,
       write: () => {
         throw new Error('quota exceeded')
       },
     }
     await expect(
       createLocalRepository(storage).execute({
-        id: 'redeem',
-        type: 'redeem',
-        rewardId: 'icecream',
+        id: 'buy',
+        type: 'buyScratchPiece',
+        activityId: 'demo-scratch',
+        index: 0,
       }),
     ).rejects.toThrow('quota')
-    expect(balance(raw)).toBe(128)
+    expect(balance(state)).toBe(128)
   })
 })

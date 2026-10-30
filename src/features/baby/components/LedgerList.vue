@@ -30,13 +30,17 @@ const emit = defineEmits<{ select: [entry: LedgerEntry] }>()
       {{
         entry.taskIcon
           ? TASK_EMOJI[entry.taskIcon]
-          : entry.kind === "spin"
-            ? "⭐"
-            : entry.kind === "redeem"
-              ? "🎁"
-              : entry.kind === "reversal"
-                ? "↩"
-                : "🌱"
+          : entry.kind === "scratch"
+            ? "🧩"
+            : entry.kind === "collection"
+              ? "🖼️"
+              : entry.kind === "spin"
+                ? "⭐"
+                : entry.kind === "redeem"
+                  ? "🎁"
+                  : entry.kind === "reversal"
+                    ? "↩"
+                    : "🌱"
       }}
     </view>
     <view class="min-w-0 flex-1 text-left">
