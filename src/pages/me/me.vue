@@ -79,7 +79,7 @@ async function exportData() {
     </view>
     <view class="card relative z-1 mx-3 mt--4 flex justify-around !py-5">
       <view class="text-center">
-        <text class="block text-25px text-primary font-bold">{{ earned }}</text><text class="muted mt-1 block text-11px">累计获得积分</text>
+        <text class="block text-25px text-primary font-bold">{{ earned }}</text><text class="muted mt-1 block text-11px">任务累计积分</text>
       </view><view class="w-1px bg-#eef0e7" /><view class="text-center">
         <text class="block text-25px text-primary font-bold">{{ streak }}</text><text class="muted mt-1 block text-11px">连续成长天数</text>
       </view><view class="w-1px bg-#eef0e7" /><view class="text-center">

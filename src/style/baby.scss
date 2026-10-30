@@ -5,7 +5,7 @@ page {
   --baby-ink: #243c34;
   --baby-green: #34785c;
   --baby-mint: #ddefe5;
-  --baby-muted: #8b918b;
+  --baby-muted: #6d796f;
   --baby-orange: #ec8b36;
   --wot-color-theme: #34785c;
   background: var(--baby-bg);
@@ -61,10 +61,6 @@ page {
 .header-right {
   position: absolute;
   right: 20px;
-}
-.brand-mark {
-  color: #bc965c;
-  font-size: 25px;
 }
 .page-content {
   padding: 0 16px;
@@ -328,7 +324,7 @@ page {
   background: #ebf1df;
 }
 .task-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
 }

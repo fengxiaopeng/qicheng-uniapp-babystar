@@ -36,9 +36,6 @@ function goBack() {
         >
           <BabyIcon name="back" :size="25" />
         </button>
-        <view v-else class="brand-mark header-left">
-          <text>✦</text>
-        </view>
         <text class="text-18px font-bold tracking-1px">{{ title }}</text>
         <!-- #ifdef H5 -->
         <view v-if="!hideChildSwitcher" class="header-right">

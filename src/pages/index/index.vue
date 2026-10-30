@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { computed, ref, watch } from 'vue'
 import {
   navigate,
   switchTab,
@@ -8,6 +9,7 @@ import {
 import BabyArt from '@/features/baby/components/BabyArt.vue'
 import BabyIcon from '@/features/baby/components/BabyIcon.vue'
 import BabyPage from '@/features/baby/components/BabyPage.vue'
+import BabySheet from '@/features/baby/components/BabySheet.vue'
 import ChildSwitcher from '@/features/baby/components/ChildSwitcher.vue'
 import TaskRow from '@/features/baby/components/TaskRow.vue'
 import { dayKey, isReversed } from '@/features/baby/domain/rules'
@@ -17,7 +19,27 @@ definePage({
   style: { navigationStyle: 'custom', navigationBarTitleText: '宝宝积分' },
 })
 
-const { state, points, todayEarned, todayTasks, streak, rewards, calendarDate } = useBaby()
+const { state, points, todayEarned, todayTasks, streak, rewards, calendarDate, completed, refresh } = useBaby()
+const pointsHelpOpen = ref(false)
+const displayedTaskIds = ref<string[]>([])
+const completedToday = computed(() => todayTasks.value.filter(task => completed(task.id) >= task.dailyLimit).length)
+const homeTasks = computed(() => displayedTaskIds.value.flatMap(id => todayTasks.value.filter(task => task.id === id)))
+function chooseHomeTasks() {
+  // Keep rows stable after recording so the result and undo action stay visible.
+  displayedTaskIds.value = [...todayTasks.value]
+    .sort((a, b) => Number(completed(a.id) >= a.dailyLimit) - Number(completed(b.id) >= b.dailyLimit))
+    .slice(0, 3)
+    .map(task => task.id)
+}
+watch([
+  () => state.value?.activeChildId,
+  () => dayKey(calendarDate.value),
+  () => todayTasks.value.map(task => task.id).join('|'),
+], chooseHomeTasks, { immediate: true })
+onShow(async () => {
+  await refresh()
+  chooseHomeTasks()
+})
 const goal = computed(
   () =>
     rewards.value.find(r => r.id === 'park')
@@ -48,15 +70,15 @@ const week = computed(() => {
 
 <template>
   <BabyPage title="宝宝积分" root hide-child-switcher>
-    <view class="mb-3 mt-1 flex items-center justify-between">
+    <view class="mb-2 mt-1 flex items-center justify-between">
       <ChildSwitcher />
     </view>
 
     <view class="balance-hero">
       <view class="relative z-1">
-        <view class="flex items-center gap-1 text-13px font-semibold">
-          可用积分 <BabyIcon name="help" :size="13" />
-        </view>
+        <button class="balance-help" aria-label="积分说明" @click="pointsHelpOpen = true">
+          可用积分 <BabyIcon name="help" :size="15" />
+        </button>
         <view class="balance-number">
           {{ points }}
         </view>
@@ -110,13 +132,16 @@ const week = computed(() => {
 
     <view class="card today-task-card mt-3">
       <view class="section-heading">
-        <text class="section-title">今日任务</text>
+        <view class="flex items-center gap-2">
+          <text class="section-title">今日任务</text>
+          <text v-if="todayTasks.length" class="muted text-11px">已完成 {{ completedToday }}/{{ todayTasks.length }}</text>
+        </view>
         <button class="text-link" @click="switchTab('/pages/tasks/index')">
           查看全部 <BabyIcon name="next" :size="14" />
         </button>
       </view>
       <TaskRow
-        v-for="task in todayTasks.slice(0, 3)"
+        v-for="task in homeTasks"
         :key="task.id"
         :task="task"
       />
@@ -168,6 +193,19 @@ const week = computed(() => {
       </view>
     </button>
     <text class="footnote">每一份努力，都值得被看见。</text>
+    <BabySheet :open="pointsHelpOpen" title="积分说明" @close="pointsHelpOpen = false">
+      <view class="form-row">
+        <text>当前可用积分</text><text class="points-text font-bold">{{ points }} 积分</text>
+      </view>
+      <view class="text-14px leading-7">
+        <text class="mt-4 block">可用积分 = 初始赠送 + 任务获得 − 奖励消耗，撤销记分会同步扣回对应积分。</text>
+        <text class="mt-3 block">「我的」中的任务累计积分，只统计未撤销的任务记分，不含初始赠送，也不会因兑换奖励而减少。</text>
+        <text class="muted mt-3 block">今天获得仅统计今天的任务记分；详细收支可以在积分明细中查看。</text>
+      </view>
+      <button class="button button-primary mt-5" @click="pointsHelpOpen = false">
+        知道了
+      </button>
+    </BabySheet>
   </BabyPage>
 </template>
 
@@ -179,6 +217,14 @@ const week = computed(() => {
   border: 1px solid #d6e9dd;
   border-radius: 21px;
   background: #dfefe4;
+}
+.baby-page .balance-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  font-size: 13px;
+  font-weight: 600;
 }
 .balance-number {
   margin: 1px 0 3px;

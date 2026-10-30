@@ -58,10 +58,32 @@
   .reward-art image {
     transform: scale(1.04);
   }
+  .reward-details {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+  .reward-name {
+    flex: 1;
+  }
+  .reward-footer {
+    display: flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .reward-card {
+    display: flex;
+    flex-direction: column;
+  }
   .reward-card .button-small {
     min-width: 60px;
-    padding: 6px 10px;
-    font-size: 10px;
+    padding: 6px;
+    font-size: 11px;
+  }
+  .reward-card .button-disabled {
+    color: #667368;
   }
   .wheel-heading {
     position: relative;
@@ -204,4 +226,15 @@
 .baby-page .wheel-many-prizes .wheel-prize-name {
   font-size: 10px;
   line-height: 14px;
+}
+
+@media (max-width: 365px) {
+  .baby-page .reward-footer {
+    min-height: 66px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .baby-page .reward-footer .button-small {
+    align-self: flex-end;
+  }
 }

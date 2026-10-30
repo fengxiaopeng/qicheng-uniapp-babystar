@@ -88,12 +88,12 @@ async function redeem() {
         <view class="reward-art">
           <BabyArt :name="reward.art" />
         </view>
-        <view class="px-1 pb-1 pt-2">
-          <view class="mb-2 text-14px font-semibold">
+        <view class="reward-details px-1 pb-1 pt-2">
+          <view class="reward-name mb-2 text-14px font-semibold">
             {{ reward.name }}
-          </view><view class="flex flex-wrap items-center justify-between gap-2">
-            <view class="points-text">
-              <text class="text-20px font-bold">{{ reward.points }}</text><text class="ml-1 text-10px">积分</text>
+          </view><view class="reward-footer">
+            <view class="points-text whitespace-nowrap">
+              <text class="text-20px font-bold">{{ reward.points }}</text><text class="ml-1 text-12px">积分</text>
             </view><button
               v-if="manage"
               class="button button-small button-outline"
@@ -112,10 +112,13 @@ async function redeem() {
               {{
                 points >= reward.points
                   ? "兑换"
-                  : `还差${reward.points - points}积分`
+                  : "积分不足"
               }}
             </button>
           </view>
+          <text v-if="!manage" class="reward-hint muted mt-1 block text-12px">
+            {{ points >= reward.points ? '现在可以兑换' : `还差 ${reward.points - points} 积分` }}
+          </text>
         </view>
       </view>
     </view>

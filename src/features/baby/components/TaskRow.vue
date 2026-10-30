@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Task } from '../domain/types'
-import { ref } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import { navigate, newId, useBaby } from '../application/use-baby'
 import { TASK_EMOJI, taskFrequencyLabel } from '../domain/rules'
 import BabyIcon from './BabyIcon.vue'
@@ -15,14 +15,24 @@ const props = withDefaults(
 )
 const { busy, completed, send, isAdmin } = useBaby()
 const undoId = ref('')
+let undoTimer: ReturnType<typeof setTimeout> | undefined
+function clearUndo() {
+  clearTimeout(undoTimer)
+  undoId.value = ''
+}
+watch(() => props.task.id, clearUndo)
+onUnmounted(clearUndo)
 async function record() {
   const receipt = await send({
     id: newId(),
     type: 'completeTask',
     taskId: props.task.id,
   })
-  if (receipt?.entryId)
+  if (receipt?.entryId) {
+    clearUndo()
     undoId.value = receipt.entryId
+    undoTimer = setTimeout(clearUndo, 8000)
+  }
 }
 async function undo() {
   if (
@@ -33,7 +43,7 @@ async function undo() {
       reason: '记分后立即撤销',
     })
   ) {
-    undoId.value = ''
+    clearUndo()
   }
 }
 </script>
@@ -50,7 +60,7 @@ async function undo() {
       <view class="task-name">
         {{ task.name }}
       </view>
-      <view class="muted mt-1 text-11px leading-4">
+      <view class="muted mt-0.5 text-12px leading-4">
         {{
           manage
             ? `${task.category} · ${taskFrequencyLabel(task)}`
