@@ -47,28 +47,9 @@ const week = computed(() => {
 </script>
 
 <template>
-  <BabyPage title="宝宝积分" root>
-    <view class="mb-4 mt-1 flex items-center justify-between">
+  <BabyPage title="宝宝积分" root hide-child-switcher>
+    <view class="mb-3 mt-1 flex items-center justify-between">
       <ChildSwitcher />
-      <button
-        class="family-shortcut"
-        aria-label="家庭管理"
-        @click="navigate('/pages/family/index')"
-      >
-        <view class="flex justify-end -space-x-2">
-          <view
-            v-for="person in state?.members.slice(0, 2)"
-            :key="person.id"
-            class="member-avatar"
-          >
-            {{ person.avatar }}
-          </view>
-          <view class="member-avatar bg-#e9ece4 text-22px text-#8c9589">
-            ＋
-          </view>
-        </view>
-        <text class="muted mt-1 block text-10px">全家一起陪伴成长</text>
-      </button>
     </view>
 
     <view class="balance-hero">
@@ -91,7 +72,7 @@ const week = computed(() => {
       <view class="hero-bear">
         <BabyArt name="bear-star" />
       </view>
-      <view class="relative z-1 mt-4 flex gap-2">
+      <view class="relative z-1 mt-3 flex gap-2">
         <button
           class="hero-shortcut"
           @click="navigate('/pages/records/index?tab=ledger')"
@@ -104,8 +85,8 @@ const week = computed(() => {
       </view>
     </view>
 
-    <view class="card mt-3">
-      <view class="mb-3 flex items-center justify-between">
+    <view class="card streak-card mt-3">
+      <view class="mb-2 flex items-center justify-between">
         <text class="text-13px font-semibold">
           已坚持
           <text class="text-19px text-primary">{{ streak }}</text> 天
@@ -127,7 +108,7 @@ const week = computed(() => {
       </view>
     </view>
 
-    <view class="card mt-3">
+    <view class="card today-task-card mt-3">
       <view class="section-heading">
         <text class="section-title">今日任务</text>
         <button class="text-link" @click="switchTab('/pages/tasks/index')">
@@ -152,7 +133,7 @@ const week = computed(() => {
 
     <button
       v-if="goal"
-      class="goal-card mt-3"
+      class="goal-card"
       @click="switchTab('/pages/rewards/index')"
     >
       <view class="relative z-1 flex-1 text-left">
@@ -194,7 +175,7 @@ const week = computed(() => {
 .balance-hero {
   position: relative;
   overflow: hidden;
-  padding: 19px 16px 13px;
+  padding: 16px 14px 12px;
   border: 1px solid #d6e9dd;
   border-radius: 21px;
   background: #dfefe4;
@@ -202,7 +183,7 @@ const week = computed(() => {
 .balance-number {
   margin: 1px 0 3px;
   color: #ee913b;
-  font-size: 62px;
+  font-size: 56px;
   font-weight: 800;
   line-height: 1.13;
   letter-spacing: -2px;
@@ -213,7 +194,7 @@ const week = computed(() => {
   top: 2px;
   right: -31px;
   width: 218px;
-  height: 165px;
+  height: 152px;
 }
 .hero-whisper {
   position: absolute;
@@ -256,20 +237,42 @@ const week = computed(() => {
   box-shadow: 0 0 0 3px #e4efe1;
 }
 .baby-page .goal-card {
+  margin-top: 20px;
+  margin-bottom: 8px;
   position: relative;
   display: flex;
   width: 100%;
   overflow: hidden;
   align-items: center;
   gap: 12px;
-  padding: 14px 10px 14px 14px;
+  padding: 12px 10px 12px 14px;
   border-radius: 18px;
   background: #fff;
 }
 .goal-art {
-  width: 99px;
-  height: 70px;
+  width: 82px;
+  height: 58px;
   overflow: hidden;
   border-radius: 12px;
+}
+.baby-page .streak-card,
+.baby-page .today-task-card {
+  padding: 12px;
+}
+.today-task-card .section-heading {
+  margin-bottom: 8px;
+}
+.today-task-card :deep(.text-link) {
+  min-height: 26px;
+}
+.today-task-card :deep(.task-row) {
+  padding: 8px 0;
+}
+.today-task-card :deep(.task-row:last-child) {
+  padding-bottom: 0;
+}
+.today-task-card :deep(.task-symbol) {
+  width: 36px;
+  height: 38px;
 }
 </style>

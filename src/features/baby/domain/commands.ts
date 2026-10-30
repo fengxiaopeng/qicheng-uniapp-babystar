@@ -9,8 +9,9 @@ import {
   TASK_ICONS,
   validImageSource,
   WHEEL_COST,
-  WHEEL_PRIZES,
   wheelRemaining,
+  wheelSettingsError,
+  wheelSettingsFor,
 } from './rules'
 
 export class BabyError extends Error {}
@@ -211,14 +212,15 @@ export function executeCommand(
         wheelRemaining(state, now) > 0,
         '今天的机会用完啦，明天再来',
       )
+      const prizes = wheelSettingsFor(state).prizes
       const draw = random()
       requireValue(draw >= 0 && draw < 1, '抽奖暂时不可用，请重试')
-      let cursor = draw * WHEEL_PRIZES.reduce((sum, p) => sum + p.weight, 0)
-      const index = WHEEL_PRIZES.findIndex((p) => {
+      let cursor = draw * prizes.reduce((sum, p) => sum + p.weight, 0)
+      const index = prizes.findIndex((p) => {
         cursor -= p.weight
         return cursor < 0
       })
-      const prize = WHEEL_PRIZES[index]
+      const prize = prizes[index]
       const orderId = `${command.id}-order`
       addEntry({
         title: `幸运转盘 · ${prize.name}`,
@@ -238,9 +240,28 @@ export function executeCommand(
         })
       }
       receipt.prizeIndex = index
+      receipt.wheelPrizes = prizes.map(p => ({ ...p }))
       receipt.message = prize.win
         ? `恭喜获得「${prize.name}」`
         : '这次是再接再厉，下次好运！'
+      break
+    }
+    case 'saveWheel': {
+      assertAdmin()
+      requireValue(command.settings.childId === childId, '转盘不属于当前宝宝')
+      const settings = { ...command.settings, prizes: command.settings.prizes.map(p => ({
+        ...p,
+        name: p.name.trim(),
+        weight: command.settings.probabilityMode === 'equal' ? 1 : p.weight,
+      })) }
+      const error = wheelSettingsError(settings)
+      requireValue(!error, error ?? '转盘设置无效')
+      state.wheelSettings ??= []
+      const index = state.wheelSettings.findIndex(s => s.childId === childId)
+      if (index < 0)
+        state.wheelSettings.push(settings)
+      else state.wheelSettings[index] = settings
+      receipt.message = '转盘设置已保存'
       break
     }
     case 'saveScratch': {

@@ -8,6 +8,7 @@ import {
   isTaskDue,
   streak,
   wheelRemaining,
+  wheelSettingsFor,
 } from '../domain/rules'
 
 // The composition root: replace this repository with an HTTP adapter when the API is ready.
@@ -159,6 +160,7 @@ export function useBaby() {
     streak: computed(() =>
       state.value ? streak(state.value, new Date(calendarNow.value)) : 0,
     ),
+    wheelSettings: computed(() => state.value ? wheelSettingsFor(state.value) : undefined),
     wheelRemaining: computed(() =>
       state.value
         ? wheelRemaining(state.value, new Date(calendarNow.value))

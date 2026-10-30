@@ -114,11 +114,20 @@ export interface WheelPrize {
   win: boolean
 }
 
+export interface WheelSettings {
+  childId: string
+  probabilityMode: 'equal' | 'custom'
+  /** Equal mode stores weight=1; custom mode stores basis points that sum to 10,000. */
+  prizes: WheelPrize[]
+}
+
 export interface Receipt {
   commandId: string
   message: string
   entryId?: string
   prizeIndex?: number
+  /** Freeze the actual draw layout so later edits never change an in-flight result. */
+  wheelPrizes?: WheelPrize[]
 }
 
 export interface BabyState {
@@ -132,6 +141,8 @@ export interface BabyState {
   ledger: LedgerEntry[]
   orders: RewardOrder[]
   scratchActivities: ScratchActivity[]
+  /** Missing in older v2 snapshots; use equal-probability defaults without rewriting data. */
+  wheelSettings?: WheelSettings[]
   /** Archived v1 data is retained for backups; it never participates in new rewards. */
   legacy?: {
     cards: CardGrant[]
@@ -147,6 +158,7 @@ export type BabyCommand = { id: string } & (
   | { type: 'reverse', entryId: string, reason: string }
   | { type: 'redeem', rewardId: string }
   | { type: 'spin' }
+  | { type: 'saveWheel', settings: WheelSettings }
   | { type: 'saveScratch', activity: ScratchActivity }
   | { type: 'buyScratchPiece', activityId: string, index: number }
   | { type: 'revealScratchPiece', activityId: string, index: number }

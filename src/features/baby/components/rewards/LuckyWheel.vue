@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Receipt } from '../../domain/types'
+import type { Receipt, WheelPrize } from '../../domain/types'
 import { onHide } from '@dcloudio/uni-app'
-import { onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { navigate, newId, useBaby } from '../../application/use-baby'
 import {
+  probabilityLabel,
   WHEEL_COST,
   WHEEL_DAILY_LIMIT,
   WHEEL_PRIZES,
@@ -12,7 +13,26 @@ import BabyArt from '../BabyArt.vue'
 import BabyIcon from '../BabyIcon.vue'
 import BabySheet from '../BabySheet.vue'
 
-const { points, busy, wheelRemaining, send } = useBaby()
+const { points, busy, wheelRemaining, send, wheelSettings, child, isAdmin }
+  = useBaby()
+const frozenPrizes = ref<WheelPrize[] | null>(null)
+const prizes = computed(
+  () => frozenPrizes.value ?? wheelSettings.value?.prizes ?? WHEEL_PRIZES,
+)
+const wheelBackground = computed(() => {
+  const colors = [
+    '#fff0cd',
+    '#e0f1e5',
+    '#f9e1dd',
+    '#e4edce',
+    '#fff0cd',
+    '#e0eef5',
+    '#e9e2f4',
+    '#f7e6cf',
+  ]
+  const step = 360 / prizes.value.length
+  return `conic-gradient(${prizes.value.map((_, i) => `${colors[i]} ${i * step}deg ${(i + 1) * step - 0.8}deg, #fffdf3 ${(i + 1) * step - 0.8}deg ${(i + 1) * step}deg`).join(',')})`
+})
 const showOdds = ref(false)
 const spinning = ref(false)
 const rotation = ref(0)
@@ -27,7 +47,10 @@ async function spin() {
     spinning.value = false
     return
   }
-  const target = (360 - (result.prizeIndex * 60 + 30)) % 360
+  frozenPrizes.value
+    = result.wheelPrizes ?? prizes.value.map(p => ({ ...p }))
+  const angle = 360 / frozenPrizes.value.length
+  const target = (360 - (result.prizeIndex * angle + angle / 2)) % 360
   rotation.value
     = rotation.value + 360 * 5 + ((target - (rotation.value % 360) + 360) % 360)
   spinTimer = setTimeout(() => {
@@ -39,13 +62,37 @@ function stopAnimation() {
   if (spinTimer)
     clearTimeout(spinTimer)
   spinning.value = false
+  frozenPrizes.value = null
 }
 onHide(stopAnimation)
 onUnmounted(stopAnimation)
+watch(
+  () => child.value?.id,
+  () => {
+    stopAnimation()
+    spinResult.value = null
+  },
+)
 </script>
 
 <template>
   <view>
+    <view class="mb-1 flex items-center justify-between">
+      <text class="tag">
+        {{
+          wheelSettings?.probabilityMode === "custom"
+            ? "自定义概率"
+            : "默认等概率"
+        }}
+      </text><button
+        v-if="isAdmin"
+        class="text-link"
+        :disabled="spinning"
+        @click="navigate('/pages/manage/rewards?tab=wheel')"
+      >
+        <BabyIcon name="settings" :size="15" />设置奖项
+      </button>
+    </view>
     <view class="wheel-heading">
       <view class="relative z-1 pt-2">
         <view class="text-24px font-bold">
@@ -59,16 +106,22 @@ onUnmounted(stopAnimation)
     </view>
     <view class="wheel-area">
       <view class="wheel-pointer" />
-      <view class="wheel-disc" :style="{ transform: `rotate(${rotation}deg)` }">
+      <view
+        class="wheel-disc" :class="{ 'wheel-many-prizes': prizes.length > 6 }"
+        :style="{
+          transform: `rotate(${rotation}deg)`,
+          background: wheelBackground,
+        }"
+      >
         <view
-          v-for="(prize, index) in WHEEL_PRIZES"
+          v-for="(prize, index) in prizes"
           :key="prize.id"
           class="wheel-prize"
           :style="{
-            transform: `translate(-50%, -50%) rotate(${index * 60 + 30}deg) translateY(-108px) rotate(-${index * 60 + 30}deg)`,
+            transform: `translate(-50%, -50%) rotate(${((index + 0.5) * 360) / prizes.length}deg) translateY(calc(0px - var(--wheel-label-radius, 108px))) rotate(-${((index + 0.5) * 360) / prizes.length}deg)`,
           }"
         >
-          <text class="block text-27px">{{ prize.icon }}</text><text class="mt-1 block text-11px font-semibold">
+          <text class="wheel-prize-icon block text-27px">{{ prize.icon }}</text><text class="wheel-prize-name mt-1 block text-11px font-semibold">
             {{ prize.name }}
           </text>
         </view>
@@ -125,10 +178,14 @@ onUnmounted(stopAnimation)
       title="小惊喜，每一份都有机会"
       @close="showOdds = false"
     >
-      <view v-for="prize in WHEEL_PRIZES" :key="prize.id" class="form-row">
-        <text>{{ prize.icon }} {{ prize.name }}</text><text class="text-primary">{{ prize.weight }}%</text>
+      <view v-for="(prize, index) in prizes" :key="prize.id" class="form-row">
+        <text>{{ prize.icon }} {{ prize.name }}</text><text class="text-primary">
+          {{
+            probabilityLabel(prizes, index)
+          }}
+        </text>
       </view><text class="footnote">
-        包含「再接再厉」未中奖项；每次转动独立计算。结果生成后立即保存，退出页面不会丢失。
+        所有奖项都列在这里，含鼓励项。转盘格子等大展示，实际概率以本表为准；等概率的百分比为近似值。结果生成后立即保存，退出页面不会丢失。
       </text>
     </BabySheet>
     <BabySheet

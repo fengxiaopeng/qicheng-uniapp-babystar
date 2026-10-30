@@ -1,6 +1,6 @@
 import type { BabyCommand, BabyRepository, BabyState } from '../domain/types'
 import { BabyError, executeCommand } from '../domain/commands'
-import { validImageSource } from '../domain/rules'
+import { validImageSource, wheelSettingsError } from '../domain/rules'
 import { migrateSnapshot } from './migrate'
 import { createDemoState } from '../domain/seed'
 
@@ -148,6 +148,9 @@ function parseState(raw: unknown): BabyState {
             && o.status === 'cancelled'
             && Number.isInteger(o.points),
         )))
+        || (state.wheelSettings !== undefined && (!Array.isArray(state.wheelSettings)
+          || new Set(state.wheelSettings.map(w => w?.childId)).size !== state.wheelSettings.length
+          || !state.wheelSettings.every(w => w && state.children.some(c => c.id === w.childId) && !wheelSettingsError(w))))
         || !state.receipts.every(r => strings(r, ['commandId', 'message']))
         || !state.children.some(c => c.id === state.activeChildId)
         || !state.members.some(m => m.id === state.activeMemberId)

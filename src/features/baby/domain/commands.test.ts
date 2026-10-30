@@ -210,7 +210,7 @@ describe('immediately completed rewards', () => {
     expect(retry.state.orders.at(-1)).not.toHaveProperty('status')
   })
   it('saves a winning wheel reward immediately and still charges misses and enforces limits', () => {
-    expect(WHEEL_PRIZES.reduce((sum, p) => sum + p.weight, 0)).toBe(100)
+    expect(WHEEL_PRIZES.every(p => p.weight === 1)).toBe(true)
     const first = run(initial(), { id: 'win', type: 'spin' })
     expect(first.state.orders.at(-1)).toMatchObject({
       name: WHEEL_PRIZES[0].name,

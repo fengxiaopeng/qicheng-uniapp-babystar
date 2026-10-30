@@ -5,7 +5,7 @@ import { useBaby } from '../application/use-baby'
 import BabyIcon from './BabyIcon.vue'
 import ChildSwitcher from './ChildSwitcher.vue'
 
-defineProps<{ title: string, back?: boolean, root?: boolean }>()
+defineProps<{ title: string, back?: boolean, root?: boolean, hideChildSwitcher?: boolean }>()
 const { error, refresh } = useBaby()
 const statusHeight = ref(0)
 onMounted(() => {
@@ -41,13 +41,13 @@ function goBack() {
         </view>
         <text class="text-18px font-bold tracking-1px">{{ title }}</text>
         <!-- #ifdef H5 -->
-        <view class="header-right">
+        <view v-if="!hideChildSwitcher" class="header-right">
           <ChildSwitcher compact />
         </view>
         <!-- #endif -->
       </view>
       <!-- #ifndef H5 -->
-      <view class="flex items-center justify-between px-4 pb-3">
+      <view v-if="!hideChildSwitcher" class="flex items-center justify-between px-4 pb-3">
         <ChildSwitcher compact />
         <text class="muted text-10px">一起看见每一步成长</text>
       </view>

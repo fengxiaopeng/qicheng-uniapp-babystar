@@ -24,7 +24,6 @@ const {
   points,
   streak,
   tasks,
-  rewards,
   isAdmin,
 } = useBaby()
 const settings = ref(false)
@@ -89,37 +88,19 @@ async function exportData() {
         </text><text class="muted mt-1 block text-11px">实现的小心愿</text>
       </view>
     </view>
-    <view v-if="isAdmin" class="card mt-5">
-      <view class="section-title">
-        家长管理
-      </view><text class="muted mt-2 block text-11px">
-        任务设置一次，按周期自动执行，让陪伴更轻松。
-      </text>
-      <view class="grid grid-cols-2 mt-4 gap-3">
-        <button class="parent-entry" @click="navigate('/pages/manage/tasks')">
-          <view class="menu-icon">
-            <BabyIcon name="tasks" />
-          </view><text class="mt-3 block text-15px font-bold">任务设置</text><text class="muted mt-1 block text-11px">
-            {{ tasks.length }} 个任务 · 自动安排
-          </text>
-        </button>
-        <button class="parent-entry" @click="navigate('/pages/manage/rewards')">
-          <view class="menu-icon !bg-#fff0d9 !text-#b38d4e">
-            <BabyIcon name="gift" />
-          </view><text class="mt-3 block text-15px font-bold">奖励设置</text><text class="muted mt-1 block text-11px">
-            {{ rewards.length }} 个心愿 · 图片刮卡
-          </text>
-        </button>
+    <view v-if="isAdmin" class="card parent-management mt-5">
+      <view class="section-heading !mb-1">
+        <text class="section-title">家长管理</text><text class="tag">管理员</text>
       </view>
-      <button
-        class="choice-row mt-2 !border-b-0"
-        @click="navigate('/pages/children/index')"
-      >
-        <BabyIcon name="user" :size="19" /><text
-          class="ml-2 flex-1 text-left text-13px"
-        >
-          宝宝档案与成长计划
-        </text><BabyIcon name="next" :size="16" />
+      <button class="parent-row" @click="navigate('/pages/manage/tasks')">
+        <view class="menu-icon !h-30px !w-30px">
+          <BabyIcon name="tasks" :size="18" />
+        </view><text class="ml-3 flex-1 text-left text-14px">任务设置</text><text class="muted mr-2 text-11px">{{ tasks.length }} 个任务</text><BabyIcon name="next" :size="16" />
+      </button>
+      <button class="parent-row" @click="navigate('/pages/manage/rewards')">
+        <view class="menu-icon !h-30px !w-30px !bg-#fff0d9 !text-#b38d4e">
+          <BabyIcon name="gift" :size="18" />
+        </view><text class="ml-3 flex-1 text-left text-14px">奖励设置</text><text class="muted mr-2 text-11px">心愿 / 转盘 / 刮卡</text><BabyIcon name="next" :size="16" />
       </button>
     </view>
     <view class="card mt-5 !py-1">
@@ -228,11 +209,15 @@ async function exportData() {
   background: #e3f0e6;
   color: #4a8060;
 }
-.baby-page .parent-entry {
-  padding: 15px 12px;
-  border: 1px solid #e5ecdf;
-  border-radius: 15px;
-  background: #f5f8ef;
-  text-align: left;
+.baby-page .parent-row {
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f1ea;
+}
+.baby-page .parent-row:last-child {
+  border-bottom: 0;
 }
 </style>
